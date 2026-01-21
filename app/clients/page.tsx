@@ -30,6 +30,33 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
   // State for monthly service usage data
   const [monthlyServiceUsage, setMonthlyServiceUsage] = useState<Record<string, number>>({})
   const [isLoadingServiceUsage, setIsLoadingServiceUsage] = useState(false)
+  
+  // State for historical monthly data
+  const [historicalData, setHistoricalData] = useState<Array<{
+    month: string;
+    year: number;
+    monthNum: number;
+    totalCount: number;
+    byCategory: Record<string, number>;
+  }>>([])
+  const [isLoadingHistorical, setIsLoadingHistorical] = useState(false)
+  
+  // State for MC street customer usage
+  const [mcStreetUsage, setMcStreetUsage] = useState<{
+    totalCustomers: number;
+    servedCustomers: number;
+    serviceCount: number;
+    customerDetails: Array<{
+      customerName: string;
+      serviceCount: number;
+    }>;
+  }>({
+    totalCustomers: 0,
+    servedCustomers: 0,
+    serviceCount: 0,
+    customerDetails: []
+  })
+  const [isLoadingMcStreet, setIsLoadingMcStreet] = useState(false)
 
   // Load monthly service usage data on component mount
   useEffect(() => {
@@ -46,6 +73,40 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
     }
     
     loadMonthlyServiceUsage()
+  }, [])
+  
+  // Load historical monthly data
+  useEffect(() => {
+    const loadHistoricalData = async () => {
+      setIsLoadingHistorical(true)
+      try {
+        const data = await CustomerManagementService.getHistoricalMonthlyVoucherServiceUsage()
+        setHistoricalData(data)
+      } catch (error) {
+        console.error('Error loading historical data:', error)
+      } finally {
+        setIsLoadingHistorical(false)
+      }
+    }
+    
+    loadHistoricalData()
+  }, [])
+  
+  // Load MC street customer usage
+  useEffect(() => {
+    const loadMcStreetUsage = async () => {
+      setIsLoadingMcStreet(true)
+      try {
+        const data = await CustomerManagementService.getMCStreetCustomerMonthlyUsage()
+        setMcStreetUsage(data)
+      } catch (error) {
+        console.error('Error loading MC street usage:', error)
+      } finally {
+        setIsLoadingMcStreet(false)
+      }
+    }
+    
+    loadMcStreetUsage()
   }, [])
 
   // Calculate statistics based on actual database fields
@@ -371,11 +432,195 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
             </div>
           </div>
         </div>
+
+        {/* MC Street Customer Monthly Usage */}
+        <div className="card-apple fade-in-apple" style={{ animationDelay: '0.85s' }}>
+          <div className="card-apple-header">
+            <h3 className="text-lg font-semibold text-text-primary">明家街客本月使用情況</h3>
+            <div className="text-sm text-text-secondary">
+              {new Date().getFullYear()}年{new Date().getMonth() + 1}月
+            </div>
+          </div>
+          <div className="card-apple-content">
+            {isLoadingMcStreet ? (
+              <div className="flex justify-center items-center py-4">
+                <div className="text-sm text-text-secondary">載入中...</div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Overview Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-bg-secondary p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-primary">{mcStreetUsage.totalCustomers}</div>
+                    <div className="text-xs text-text-secondary mt-1">總客戶數</div>
+                  </div>
+                  <div className="bg-bg-secondary p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-emerald-600">{mcStreetUsage.servedCustomers}</div>
+                    <div className="text-xs text-text-secondary mt-1">已服務客戶</div>
+                  </div>
+                  <div className="bg-bg-secondary p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-blue-600">{mcStreetUsage.serviceCount}</div>
+                    <div className="text-xs text-text-secondary mt-1">服務次數</div>
+                  </div>
+                </div>
+
+                {/* Service Rate */}
+                {mcStreetUsage.totalCustomers > 0 && (
+                  <div className="bg-bg-tertiary p-3 rounded-xl">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-text-secondary">服務覆蓋率</span>
+                      <span className="text-sm font-bold text-primary">
+                        {((mcStreetUsage.servedCustomers / mcStreetUsage.totalCustomers) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(mcStreetUsage.servedCustomers / mcStreetUsage.totalCustomers) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Customers */}
+                {mcStreetUsage.customerDetails.length > 0 && (
+                  <div>
+                    <div className="text-xs text-text-secondary font-medium mb-2">
+                      服務次數最多客戶（前5名）:
+                    </div>
+                    <div className="space-y-2">
+                      {mcStreetUsage.customerDetails.slice(0, 5).map((detail, index) => (
+                        <div key={detail.customerName} className="flex justify-between items-center py-1 px-2 bg-bg-primary rounded text-xs">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-text-tertiary">#{index + 1}</span>
+                            <span className="text-text-primary">{detail.customerName}</span>
+                          </div>
+                          <span className="text-primary font-semibold">{detail.serviceCount}次</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {mcStreetUsage.serviceCount === 0 && (
+                  <div className="text-center py-4">
+                    <div className="text-sm text-text-secondary">本月暫無明家街客服務記錄</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Historical Monthly Data */}
+      <div className="card-apple fade-in-apple" style={{ animationDelay: '0.9s' }}>
+        <div className="card-apple-header">
+          <h3 className="text-lg font-semibold text-text-primary">社區券服務使用趨勢（過往6個月）</h3>
+        </div>
+        <div className="card-apple-content">
+          {isLoadingHistorical ? (
+            <div className="flex justify-center items-center py-4">
+              <div className="text-sm text-text-secondary">載入中...</div>
+            </div>
+          ) : historicalData.length === 0 ? (
+            <div className="text-center py-4">
+              <div className="text-sm text-text-secondary">暫無歷史數據</div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Monthly Trend Chart */}
+              <div className="overflow-x-auto">
+                <div className="min-w-[600px]">
+                  <div className="flex items-end justify-between h-48 px-2 border-b border-border-light">
+                    {historicalData.map((monthData, index) => {
+                      const maxCount = Math.max(...historicalData.map(d => d.totalCount), 1);
+                      const heightPercent = (monthData.totalCount / maxCount) * 100;
+                      
+                      return (
+                        <div key={index} className="flex-1 flex flex-col items-center justify-end px-1">
+                          <div className="relative group w-full">
+                            {/* Bar */}
+                            <div 
+                              className="bg-gradient-to-t from-primary to-blue-400 rounded-t-lg transition-all duration-300 hover:from-primary-600 hover:to-blue-500 cursor-pointer w-full"
+                              style={{ height: `${heightPercent}%`, minHeight: monthData.totalCount > 0 ? '20px' : '0' }}
+                            >
+                              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-semibold text-primary whitespace-nowrap">
+                                {monthData.totalCount > 0 ? monthData.totalCount : ''}
+                              </div>
+                            </div>
+                            
+                            {/* Tooltip on hover */}
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-nowrap z-10 shadow-lg">
+                              <div className="font-semibold mb-1">{monthData.month}</div>
+                              <div>總人次: {monthData.totalCount}</div>
+                              {Object.entries(monthData.byCategory).length > 0 && (
+                                <div className="mt-1 pt-1 border-t border-gray-700">
+                                  {Object.entries(monthData.byCategory).map(([cat, count]) => (
+                                    <div key={cat} className="flex justify-between space-x-2">
+                                      <span>{cat}:</span>
+                                      <span>{count}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Month Label */}
+                          <div className="text-xs text-text-secondary mt-2 whitespace-nowrap">
+                            {monthData.monthNum}月
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Details Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border-light">
+                      <th className="text-left py-2 px-3 text-text-secondary font-medium">月份</th>
+                      <th className="text-right py-2 px-3 text-text-secondary font-medium">總人次</th>
+                      <th className="text-left py-2 px-3 text-text-secondary font-medium">按項目分佈</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historicalData.map((monthData, index) => (
+                      <tr key={index} className="border-b border-border-light last:border-b-0 hover:bg-bg-tertiary">
+                        <td className="py-2 px-3 text-text-primary font-medium">{monthData.month}</td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="font-semibold text-primary">{monthData.totalCount}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          {Object.keys(monthData.byCategory).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(monthData.byCategory).map(([cat, count]) => (
+                                <span key={cat} className="inline-flex items-center px-2 py-0.5 bg-bg-secondary rounded text-xs">
+                                  {cat}: <span className="ml-1 font-semibold text-primary">{count}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-tertiary">無記錄</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Applied Filters Summary */}
       {Object.keys(filters).length > 0 && (
-        <div className="card-apple fade-in-apple" style={{ animationDelay: '0.8s' }}>
+        <div className="card-apple fade-in-apple" style={{ animationDelay: '1.0s' }}>
           <div className="card-apple-header">
             <h3 className="text-lg font-semibold text-text-primary">目前篩選條件</h3>
           </div>

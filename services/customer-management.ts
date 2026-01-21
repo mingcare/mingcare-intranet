@@ -620,4 +620,230 @@ export class CustomerManagementService {
       return {};
     }
   }
+
+  /**
+   * 獲取過往月份社區券客戶服務使用情況（最近6個月）
+   * @returns 過往月份服務使用統計數組
+   */
+  static async getHistoricalMonthlyVoucherServiceUsage(): Promise<Array<{
+    month: string;
+    year: number;
+    monthNum: number;
+    totalCount: number;
+    byCategory: Record<string, number>;
+  }>> {
+    try {
+      const results = [];
+      const now = new Date();
+      
+      // 獲取過去6個月的數據
+      for (let i = 1; i <= 6; i++) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth();
+        
+        const formatDateLocal = (y: number, m: number, d: number) => 
+          `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+        const startOfMonth = formatDateLocal(year, month, 1);
+        const endOfMonth = formatDateLocal(year, month, lastDayOfMonth);
+
+        // 獲取社區券客戶
+        const { data: voucherCustomers, error: customerError } = await supabase
+          .from('customer_personal_data')
+          .select('customer_name')
+          .eq('customer_type', '社區券客戶');
+
+        if (customerError || !voucherCustomers || voucherCustomers.length === 0) {
+          continue;
+        }
+
+        const voucherCustomerNames = voucherCustomers.map((c: any) => c.customer_name).filter(Boolean);
+
+        // 查詢該月份的服務記錄
+        const { data: billingData, error: billingError } = await supabase
+          .from('billing_salary_data')
+          .select('customer_name, service_date, project_category')
+          .gte('service_date', startOfMonth)
+          .lte('service_date', endOfMonth)
+          .in('customer_name', voucherCustomerNames);
+
+        if (billingError || !billingData || billingData.length === 0) {
+          results.push({
+            month: `${year}年${month + 1}月`,
+            year,
+            monthNum: month + 1,
+            totalCount: 0,
+            byCategory: {}
+          });
+          continue;
+        }
+
+        // 按項目分類統計
+        const projectCategoryServiceCount = new Map<string, Set<string>>();
+        
+        billingData.forEach((record: any) => {
+          const projectCategory = record.project_category || '未知';
+          
+          if (projectCategory === 'MC街客') {
+            return;
+          }
+          
+          if (!projectCategoryServiceCount.has(projectCategory)) {
+            projectCategoryServiceCount.set(projectCategory, new Set());
+          }
+          
+          projectCategoryServiceCount.get(projectCategory)!.add(record.customer_name);
+        });
+
+        const byCategory: Record<string, number> = {};
+        let totalCount = 0;
+        projectCategoryServiceCount.forEach((customerSet, projectCategory) => {
+          byCategory[projectCategory] = customerSet.size;
+          totalCount += customerSet.size;
+        });
+
+        results.push({
+          month: `${year}年${month + 1}月`,
+          year,
+          monthNum: month + 1,
+          totalCount,
+          byCategory
+        });
+      }
+
+      return results.reverse(); // 由舊到新排序
+    } catch (error) {
+      console.error('Error in getHistoricalMonthlyVoucherServiceUsage:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 獲取明家街客當月使用情況
+   * @returns 當月明家街客服務使用統計
+   */
+  static async getMCStreetCustomerMonthlyUsage(): Promise<{
+    totalCustomers: number;
+    servedCustomers: number;
+    serviceCount: number;
+    customerDetails: Array<{
+      customerName: string;
+      serviceCount: number;
+    }>;
+  }> {
+    try {
+      // 獲取當前月份的開始和結束日期
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const formatDateLocal = (y: number, m: number, d: number) => 
+        `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const startOfMonth = formatDateLocal(currentYear, currentMonth, 1);
+      const endOfMonth = formatDateLocal(currentYear, currentMonth, lastDayOfMonth);
+
+      console.log('=== MC Street Customer Monthly Usage ===');
+      console.log('Date range:', { startOfMonth, endOfMonth });
+
+      // Step 1: 獲取所有明家街客客戶
+      const { data: mcCustomers, error: customerError } = await supabase
+        .from('customer_personal_data')
+        .select('customer_name')
+        .eq('customer_type', '明家街客');
+
+      if (customerError) {
+        console.error('Error querying MC street customers:', customerError);
+        return {
+          totalCustomers: 0,
+          servedCustomers: 0,
+          serviceCount: 0,
+          customerDetails: []
+        };
+      }
+
+      const totalCustomers = mcCustomers?.length || 0;
+      
+      if (!mcCustomers || mcCustomers.length === 0) {
+        console.log('No MC street customers found');
+        return {
+          totalCustomers: 0,
+          servedCustomers: 0,
+          serviceCount: 0,
+          customerDetails: []
+        };
+      }
+
+      const mcCustomerNames = mcCustomers.map((c: any) => c.customer_name).filter(Boolean);
+
+      // Step 2: 查詢本月服務記錄（project_category = 'MC街客'）
+      const { data: billingData, error: billingError } = await supabase
+        .from('billing_salary_data')
+        .select('customer_name, service_date')
+        .gte('service_date', startOfMonth)
+        .lte('service_date', endOfMonth)
+        .eq('project_category', 'MC街客')
+        .in('customer_name', mcCustomerNames);
+
+      if (billingError) {
+        console.error('Error querying MC street billing data:', billingError);
+        return {
+          totalCustomers,
+          servedCustomers: 0,
+          serviceCount: 0,
+          customerDetails: []
+        };
+      }
+
+      const serviceCount = billingData?.length || 0;
+      
+      if (!billingData || billingData.length === 0) {
+        console.log('No MC street service records found for current month');
+        return {
+          totalCustomers,
+          servedCustomers: 0,
+          serviceCount: 0,
+          customerDetails: []
+        };
+      }
+
+      // Step 3: 統計每個客戶的服務次數
+      const customerServiceMap = new Map<string, number>();
+      billingData.forEach((record: any) => {
+        const count = customerServiceMap.get(record.customer_name) || 0;
+        customerServiceMap.set(record.customer_name, count + 1);
+      });
+
+      const customerDetails = Array.from(customerServiceMap.entries())
+        .map(([customerName, count]) => ({
+          customerName,
+          serviceCount: count
+        }))
+        .sort((a, b) => b.serviceCount - a.serviceCount);
+
+      const servedCustomers = customerServiceMap.size;
+
+      console.log('MC Street Monthly Usage:', {
+        totalCustomers,
+        servedCustomers,
+        serviceCount,
+        customerDetails: customerDetails.slice(0, 5)
+      });
+
+      return {
+        totalCustomers,
+        servedCustomers,
+        serviceCount,
+        customerDetails
+      };
+    } catch (error) {
+      console.error('Error in getMCStreetCustomerMonthlyUsage:', error);
+      return {
+        totalCustomers: 0,
+        servedCustomers: 0,
+        serviceCount: 0,
+        customerDetails: []
+      };
+    }
+  }
 }
