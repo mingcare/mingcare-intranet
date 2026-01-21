@@ -869,19 +869,22 @@ export class CustomerManagementService {
       console.log('=== Introducer Monthly Active Customers ===');
       console.log('Date range:', { startOfMonth, endOfMonth });
 
-      // Step 1: 獲取所有有介紹人的客戶
-      const { data: customersWithIntroducer, error: customerError } = await supabase
+      // Step 1: 獲取所有客戶及其介紹人
+      const { data: allCustomers, error: customerError } = await supabase
         .from('customer_personal_data')
-        .select('customer_name, introducer')
-        .not('introducer', 'is', null)
-        .neq('introducer', '');
+        .select('customer_name, introducer');
 
       if (customerError) {
-        console.error('Error querying customers with introducer:', customerError);
+        console.error('Error querying customers:', customerError);
         return {};
       }
 
-      console.log('Customers with introducer found:', customersWithIntroducer?.length || 0);
+      // 過濾有介紹人的客戶
+      const customersWithIntroducer = (allCustomers || []).filter(
+        (c: any) => c.introducer && c.introducer.trim() !== ''
+      );
+
+      console.log('Customers with introducer found:', customersWithIntroducer.length);
 
       if (!customersWithIntroducer || customersWithIntroducer.length === 0) {
         console.log('No customers with introducer found');
