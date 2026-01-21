@@ -113,6 +113,7 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
   const [introducerActiveCustomers, setIntroducerActiveCustomers] = useState<Record<string, {
     activeCount: number;
     activeCustomers: string[];
+    byCustomerType: Record<string, number>;
   }>>({})
   const [isLoadingIntroducerActive, setIsLoadingIntroducerActive] = useState(false)
 
@@ -351,15 +352,23 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
                   const totalCount = Object.values(customerTypes).reduce((sum, count) => sum + count, 0)
                   const activeData = introducerActiveCustomers[introducer]
                   const activeCount = activeData?.activeCount || 0
+                  const voucherActive = activeData?.byCustomerType?.['社區券客戶'] || 0
+                  const mcStreetActive = activeData?.byCustomerType?.['明家街客'] || 0
                   return (
                     <div key={introducer} className="border-b border-divider-light last:border-b-0 pb-3 last:pb-0">
                       <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center space-x-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                           <span className="text-sm font-medium text-text-primary truncate">{introducer}</span>
-                          {activeCount > 0 && (
+                          {voucherActive > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 shrink-0">
+                              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1 animate-pulse"></span>
+                              券{voucherActive}
+                            </span>
+                          )}
+                          {mcStreetActive > 0 && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 shrink-0">
                               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1 animate-pulse"></span>
-                              {activeCount}活躍
+                              街{mcStreetActive}
                             </span>
                           )}
                         </div>

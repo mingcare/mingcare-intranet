@@ -848,12 +848,13 @@ export class CustomerManagementService {
   }
 
   /**
-   * 獲取各介紹人當月活躍客戶數據
+   * 獲取各介紹人當月活躍客戶數據（按客戶類型分組）
    * @returns 介紹人當月活躍客戶統計
    */
   static async getIntroducerMonthlyActiveCustomers(): Promise<Record<string, {
     activeCount: number;
     activeCustomers: string[];
+    byCustomerType: Record<string, number>;
   }>> {
     try {
       // 獲取當前月份的開始和結束日期
@@ -869,10 +870,10 @@ export class CustomerManagementService {
       console.log('=== Introducer Monthly Active Customers ===');
       console.log('Date range:', { startOfMonth, endOfMonth });
 
-      // Step 1: 獲取所有客戶及其介紹人
+      // Step 1: 獲取所有客戶及其介紹人和客戶類型
       const { data: allCustomers, error: customerError } = await supabase
         .from('customer_personal_data')
-        .select('customer_name, introducer');
+        .select('customer_name, introducer, customer_type');
 
       if (customerError) {
         console.error('Error querying customers:', customerError);
@@ -891,11 +892,13 @@ export class CustomerManagementService {
         return {};
       }
 
-      // 建立客戶名到介紹人的映射
+      // 建立客戶名到介紹人和客戶類型的映射
       const customerToIntroducer = new Map<string, string>();
+      const customerToType = new Map<string, string>();
       customersWithIntroducer.forEach((c: any) => {
         if (c.customer_name && c.introducer) {
           customerToIntroducer.set(c.customer_name, c.introducer);
+          customerToType.set(c.customer_name, c.customer_type || '未分類');
         }
       });
 
@@ -925,27 +928,46 @@ export class CustomerManagementService {
       const activeCustomerNames = new Set(billingData.map((r: any) => r.customer_name));
       console.log('Active customer names this month:', activeCustomerNames.size);
 
-      // Step 3: 統計每個介紹人的活躍客戶
-      const introducerActiveCustomers = new Map<string, Set<string>>();
+      // Step 3: 統計每個介紹人的活躍客戶（按客戶類型分組）
+      const introducerActiveCustomers = new Map<string, {
+        customers: Set<string>;
+        byType: Map<string, Set<string>>;
+      }>();
       
       customerNames.forEach((customerName) => {
         if (activeCustomerNames.has(customerName)) {
           const introducer = customerToIntroducer.get(customerName);
+          const customerType = customerToType.get(customerName) || '未分類';
           if (introducer) {
             if (!introducerActiveCustomers.has(introducer)) {
-              introducerActiveCustomers.set(introducer, new Set());
+              introducerActiveCustomers.set(introducer, {
+                customers: new Set(),
+                byType: new Map()
+              });
             }
-            introducerActiveCustomers.get(introducer)!.add(customerName);
+            const data = introducerActiveCustomers.get(introducer)!;
+            data.customers.add(customerName);
+            
+            if (!data.byType.has(customerType)) {
+              data.byType.set(customerType, new Set());
+            }
+            data.byType.get(customerType)!.add(customerName);
           }
         }
       });
 
       // Step 4: 轉換為結果格式
-      const result: Record<string, { activeCount: number; activeCustomers: string[] }> = {};
-      introducerActiveCustomers.forEach((customerSet, introducer) => {
+      const result: Record<string, { activeCount: number; activeCustomers: string[]; byCustomerType: Record<string, number> }> = {};
+      introducerActiveCustomers.forEach((data, introducer) => {
+        const byCustomerType: Record<string, number> = {};
+        data.byType.forEach((customerSet, type) => {
+          byCustomerType[type] = customerSet.size;
+        });
+        
         result[introducer] = {
-          activeCount: customerSet.size,
-          activeCustomers: Array.from(customerSet)
+          activeCount: data.customers.size,
+          activeCustomers: Array.from(data.customers),
+          byCustomerType
         };
       });
 
