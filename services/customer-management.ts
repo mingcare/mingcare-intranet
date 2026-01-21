@@ -846,4 +846,102 @@ export class CustomerManagementService {
       };
     }
   }
+
+  /**
+   * 獲取各介紹人當月活躍客戶數據
+   * @returns 介紹人當月活躍客戶統計
+   */
+  static async getIntroducerMonthlyActiveCustomers(): Promise<Record<string, {
+    activeCount: number;
+    activeCustomers: string[];
+  }>> {
+    try {
+      // 獲取當前月份的開始和結束日期
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const formatDateLocal = (y: number, m: number, d: number) => 
+        `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const startOfMonth = formatDateLocal(currentYear, currentMonth, 1);
+      const endOfMonth = formatDateLocal(currentYear, currentMonth, lastDayOfMonth);
+
+      console.log('=== Introducer Monthly Active Customers ===');
+      console.log('Date range:', { startOfMonth, endOfMonth });
+
+      // Step 1: 獲取所有有介紹人的客戶
+      const { data: customersWithIntroducer, error: customerError } = await supabase
+        .from('customer_personal_data')
+        .select('customer_name, introducer')
+        .not('introducer', 'is', null)
+        .neq('introducer', '');
+
+      if (customerError) {
+        console.error('Error querying customers with introducer:', customerError);
+        return {};
+      }
+
+      if (!customersWithIntroducer || customersWithIntroducer.length === 0) {
+        console.log('No customers with introducer found');
+        return {};
+      }
+
+      // 建立客戶名到介紹人的映射
+      const customerToIntroducer = new Map<string, string>();
+      customersWithIntroducer.forEach((c: any) => {
+        if (c.customer_name && c.introducer) {
+          customerToIntroducer.set(c.customer_name, c.introducer);
+        }
+      });
+
+      const customerNames = Array.from(customerToIntroducer.keys());
+
+      // Step 2: 查詢本月這些客戶的服務記錄
+      const { data: billingData, error: billingError } = await supabase
+        .from('billing_salary_data')
+        .select('customer_name')
+        .gte('service_date', startOfMonth)
+        .lte('service_date', endOfMonth)
+        .in('customer_name', customerNames);
+
+      if (billingError) {
+        console.error('Error querying billing data:', billingError);
+        return {};
+      }
+
+      if (!billingData || billingData.length === 0) {
+        console.log('No billing records found for customers with introducer');
+        return {};
+      }
+
+      // Step 3: 統計每個介紹人的活躍客戶
+      const introducerActiveCustomers = new Map<string, Set<string>>();
+      
+      billingData.forEach((record: any) => {
+        const introducer = customerToIntroducer.get(record.customer_name);
+        if (introducer) {
+          if (!introducerActiveCustomers.has(introducer)) {
+            introducerActiveCustomers.set(introducer, new Set());
+          }
+          introducerActiveCustomers.get(introducer)!.add(record.customer_name);
+        }
+      });
+
+      // Step 4: 轉換為結果格式
+      const result: Record<string, { activeCount: number; activeCustomers: string[] }> = {};
+      introducerActiveCustomers.forEach((customerSet, introducer) => {
+        result[introducer] = {
+          activeCount: customerSet.size,
+          activeCustomers: Array.from(customerSet)
+        };
+      });
+
+      console.log('Introducer monthly active customers:', result);
+      return result;
+
+    } catch (error) {
+      console.error('Error in getIntroducerMonthlyActiveCustomers:', error);
+      return {};
+    }
+  }
 }

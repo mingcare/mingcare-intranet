@@ -109,6 +109,30 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
     loadMcStreetUsage()
   }, [])
 
+  // State for introducer monthly active customers
+  const [introducerActiveCustomers, setIntroducerActiveCustomers] = useState<Record<string, {
+    activeCount: number;
+    activeCustomers: string[];
+  }>>({})
+  const [isLoadingIntroducerActive, setIsLoadingIntroducerActive] = useState(false)
+
+  // Load introducer monthly active customers
+  useEffect(() => {
+    const loadIntroducerActiveCustomers = async () => {
+      setIsLoadingIntroducerActive(true)
+      try {
+        const data = await CustomerManagementService.getIntroducerMonthlyActiveCustomers()
+        setIntroducerActiveCustomers(data)
+      } catch (error) {
+        console.error('Error loading introducer active customers:', error)
+      } finally {
+        setIsLoadingIntroducerActive(false)
+      }
+    }
+    
+    loadIntroducerActiveCustomers()
+  }, [])
+
   // Calculate statistics based on actual database fields
   const totalCustomers = customers.length
   
@@ -302,9 +326,19 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
         {/* Top Referrers */}
         <div className="card-apple fade-in-apple" style={{ animationDelay: '0.7s' }}>
           <div className="card-apple-header">
-            <h3 className="text-lg font-semibold text-text-primary">主要介紹人</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-text-primary">主要介紹人</h3>
+              <span className="text-xs text-text-secondary">
+                {new Date().getFullYear()}年{new Date().getMonth() + 1}月活躍
+              </span>
+            </div>
           </div>
           <div className="card-apple-content">
+            {isLoadingIntroducerActive ? (
+              <div className="flex justify-center items-center py-4">
+                <div className="text-sm text-text-secondary">載入中...</div>
+              </div>
+            ) : (
             <div className="space-y-4">
               {Object.entries(introducerByCustomerTypeStats)
                 .sort(([,a], [,b]) => {
@@ -315,11 +349,21 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
                 .slice(0, 6)
                 .map(([introducer, customerTypes]) => {
                   const totalCount = Object.values(customerTypes).reduce((sum, count) => sum + count, 0)
+                  const activeData = introducerActiveCustomers[introducer]
+                  const activeCount = activeData?.activeCount || 0
                   return (
                     <div key={introducer} className="border-b border-divider-light last:border-b-0 pb-3 last:pb-0">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-text-primary truncate">{introducer}</span>
-                        <span className="text-sm font-semibold text-primary">{totalCount}</span>
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="text-sm font-medium text-text-primary truncate">{introducer}</span>
+                          {activeCount > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 shrink-0">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1 animate-pulse"></span>
+                              {activeCount}活躍
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold text-primary shrink-0">{totalCount}</span>
                       </div>
                       <div className="pl-2 space-y-1">
                         {Object.entries(customerTypes).map(([customerType, count]) => (
@@ -333,6 +377,7 @@ function CustomerSummary({ customers, filters, onExportPDF, exportLoading }: Cus
                   )
                 })}
             </div>
+            )}
           </div>
         </div>
 
