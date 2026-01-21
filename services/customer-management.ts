@@ -881,6 +881,8 @@ export class CustomerManagementService {
         return {};
       }
 
+      console.log('Customers with introducer found:', customersWithIntroducer?.length || 0);
+
       if (!customersWithIntroducer || customersWithIntroducer.length === 0) {
         console.log('No customers with introducer found');
         return {};
@@ -895,35 +897,43 @@ export class CustomerManagementService {
       });
 
       const customerNames = Array.from(customerToIntroducer.keys());
+      console.log('Customer names to search:', customerNames.length, 'first 5:', customerNames.slice(0, 5));
 
-      // Step 2: 查詢本月這些客戶的服務記錄
+      // Step 2: 查詢本月所有服務記錄
       const { data: billingData, error: billingError } = await supabase
         .from('billing_salary_data')
         .select('customer_name')
         .gte('service_date', startOfMonth)
-        .lte('service_date', endOfMonth)
-        .in('customer_name', customerNames);
+        .lte('service_date', endOfMonth);
 
       if (billingError) {
         console.error('Error querying billing data:', billingError);
         return {};
       }
 
+      console.log('All billing records this month:', billingData?.length || 0);
+
       if (!billingData || billingData.length === 0) {
-        console.log('No billing records found for customers with introducer');
+        console.log('No billing records found this month');
         return {};
       }
+
+      // 獲取所有本月有服務的客戶名
+      const activeCustomerNames = new Set(billingData.map((r: any) => r.customer_name));
+      console.log('Active customer names this month:', activeCustomerNames.size);
 
       // Step 3: 統計每個介紹人的活躍客戶
       const introducerActiveCustomers = new Map<string, Set<string>>();
       
-      billingData.forEach((record: any) => {
-        const introducer = customerToIntroducer.get(record.customer_name);
-        if (introducer) {
-          if (!introducerActiveCustomers.has(introducer)) {
-            introducerActiveCustomers.set(introducer, new Set());
+      customerNames.forEach((customerName) => {
+        if (activeCustomerNames.has(customerName)) {
+          const introducer = customerToIntroducer.get(customerName);
+          if (introducer) {
+            if (!introducerActiveCustomers.has(introducer)) {
+              introducerActiveCustomers.set(introducer, new Set());
+            }
+            introducerActiveCustomers.get(introducer)!.add(customerName);
           }
-          introducerActiveCustomers.get(introducer)!.add(record.customer_name);
         }
       });
 
@@ -936,7 +946,8 @@ export class CustomerManagementService {
         };
       });
 
-      console.log('Introducer monthly active customers:', result);
+      console.log('Introducer monthly active customers result:', result);
+      console.log('Introducers with active customers:', Object.keys(result).length);
       return result;
 
     } catch (error) {
