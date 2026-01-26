@@ -328,7 +328,25 @@ export default function AccountingPage() {
 
   // 計算零用金期初餘額（使用歷史累計數據）
   const getPettyCashOpeningBalance = () => {
-    if (selectedMonth === 'all') return 0
+    // 如果選擇「全部月份」，則計算該年度之前的累計餘額
+    if (selectedMonth === 'all') {
+      // 找到選擇年份的前一年12月的餘額
+      const prevYear = selectedYear - 1
+      const prevYearEndKey = `${prevYear}-12`
+      
+      const sortedMonths = Object.keys(pettyCashHistoricalBalance).sort()
+      let openingBalance = 0
+      
+      for (const m of sortedMonths) {
+        if (m <= prevYearEndKey) {
+          openingBalance = pettyCashHistoricalBalance[m]
+        } else {
+          break
+        }
+      }
+      
+      return openingBalance
+    }
     
     // 找到選擇月份的上一個月
     const [year, month] = selectedMonth.split('-').map(Number)
