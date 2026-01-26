@@ -1,232 +1,263 @@
 #!/usr/bin/env python3
 """
-明家居家護理服務 - 財務數據導入腳本 v3.0
-重新設計：簡潔版本
+財務交易數據導入腳本 v3.0
+- 支持帶字母後綴的序號 (如 1699A, 1699B, 1699C)
+- 序號格式: 00001699A, 00001699B...
 """
 
 import csv
 import os
+import sys
 import re
 from datetime import datetime
-from supabase import create_client
+from supabase import create_client, Client
 
 # Supabase 配置
-SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+SUPABASE_URL = os.environ.get('NEXT_PUBLIC_SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("❌ 錯誤：請設定環境變數 NEXT_PUBLIC_SUPABASE_URL 和 NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    exit(1)
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# CSV 文件路徑
-CSV_PATH = "/Users/joecheung/Downloads/明家居家護理服務-財務報表 - 副本 - 明家居家護理服務-財務報表 (2).csv"
-
-
-def clean_amount(value: str) -> float:
-    """清理金額字串，轉換為數字"""
-    if not value or value.strip() == '':
-        return 0.0
-    # 移除 $, 逗號, 空格
-    cleaned = re.sub(r'[$,\s]', '', value.strip())
+def clean_amount(amount_str):
+    """清理金額字符串，轉換為數字"""
+    if not amount_str or not amount_str.strip():
+        return 0
+    
+    cleaned = (amount_str
+               .replace('$', '')
+               .replace(',', '')
+               .replace(' ', '')
+               .replace('\n', '')
+               .strip())
+    
     try:
-        return float(cleaned) if cleaned else 0.0
-    except ValueError:
-        return 0.0
+        amount = float(cleaned)
+        return amount if amount != 0 else 0
+    except (ValueError, TypeError):
+        return 0
 
+def clean_text(text):
+    """清理文本字段"""
+    if not text:
+        return None
+    cleaned = ' '.join(text.strip().split())
+    return cleaned if cleaned else None
 
-def parse_date(date_str: str) -> str:
-    """解析日期字串為 ISO 格式"""
-    if not date_str or date_str.strip() == '':
+def parse_date(date_str):
+    """解析日期"""
+    if not date_str:
         return None
     
-    date_str = date_str.strip()
-    
-    # 嘗試不同的日期格式
-    formats = [
-        '%Y/%m/%d',
-        '%Y-%m-%d',
-        '%d/%m/%Y',
-        '%Y年%m月%d日',
-    ]
-    
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(date_str, fmt)
-            return dt.strftime('%Y-%m-%d')
-        except ValueError:
-            continue
+    try:
+        parts = date_str.split('/')
+        if len(parts) == 3:
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            date_obj = datetime(year, month, day)
+            return date_obj.strftime('%Y-%m-%d')
+    except (ValueError, IndexError):
+        pass
     
     return None
 
+def extract_fiscal_year(billing_month):
+    """提取財政年份"""
+    if not billing_month:
+        return None
+    
+    match = re.search(r'(\d{4})年', billing_month)
+    return int(match.group(1)) if match else None
 
-def extract_fiscal_year(billing_month: str, date_str: str) -> int:
-    """從帳單月份或交易日期提取所屬年份"""
-    # 優先從帳單月份提取
-    if billing_month:
-        match = re.search(r'(\d{4})', billing_month)
-        if match:
-            return int(match.group(1))
+def format_journal_number(seq_num):
+    """
+    將序號格式化
+    - 純數字: 1699 -> 00001699
+    - 帶字母: 1699A -> 00001699A
+    """
+    if not seq_num:
+        return None
     
-    # 從交易日期提取
-    if date_str:
-        match = re.search(r'(\d{4})', date_str)
-        if match:
-            return int(match.group(1))
+    seq_num = str(seq_num).strip()
     
-    return datetime.now().year
+    # 檢查是否帶字母後綴 (如 1699A, 200a)
+    match = re.match(r'^(\d+)([A-Za-z]+)$', seq_num)
+    if match:
+        num_part = match.group(1)
+        letter_part = match.group(2).upper()  # 統一大寫
+        return num_part.zfill(8) + letter_part
+    
+    # 純數字
+    try:
+        num = int(seq_num)
+        return str(num).zfill(8)
+    except (ValueError, TypeError):
+        # 特殊格式 (如 R14)
+        return seq_num.zfill(8) if seq_num else None
 
+def extract_max_number(seq_num):
+    """提取序號的數字部分用於計算最大值"""
+    if not seq_num:
+        return 0
+    
+    match = re.match(r'^(\d+)', str(seq_num))
+    if match:
+        return int(match.group(1))
+    return 0
 
-def main():
-    print("=" * 60)
-    print("明家居家護理服務 - 財務數據導入 v3.0")
-    print("=" * 60)
+def import_csv(csv_file_path):
+    """主要導入函數"""
+    print('🚀 開始導入財務數據 v3.0...')
+    print(f'📁 CSV文件: {csv_file_path}')
+    print('📋 支持帶字母後綴的序號 (如 1699A)')
     
-    # 讀取 CSV
-    print(f"\n📂 讀取 CSV: {CSV_PATH}")
-    
-    records = []
-    skipped = 0
-    
-    with open(CSV_PATH, 'r', encoding='utf-8-sig') as f:
-        # 跳過前兩行空行
-        lines = f.readlines()
-        
-        # 找到標題行
-        header_line_idx = None
-        for i, line in enumerate(lines):
-            if '序號' in line and '交易日期' in line:
-                header_line_idx = i
-                break
-        
-        if header_line_idx is None:
-            print("❌ 找不到標題行")
-            return
-        
-        # 重新讀取，跳過標題行之前的內容
-        f.seek(0)
-        reader = csv.DictReader(lines[header_line_idx:])
-        
-        for row in reader:
-            # 跳過空行
-            transaction_code = row.get('序號', '').strip()
-            transaction_date = row.get('交易日期', '').strip()
-            
-            if not transaction_code or not transaction_date:
-                skipped += 1
-                continue
-            
-            # 跳過無效數據
-            if transaction_code in ['', '#REF!'] or '序號' in transaction_code:
-                skipped += 1
-                continue
-            
-            # 解析日期
-            parsed_date = parse_date(transaction_date)
-            if not parsed_date:
-                skipped += 1
-                continue
-            
-            # 提取數據
-            billing_month = row.get('帳單所屬月份', '').strip()
-            fiscal_year = extract_fiscal_year(billing_month, transaction_date)
-            
-            income_amount = clean_amount(row.get('收入金額', ''))
-            expense_amount = clean_amount(row.get('支出金額', ''))
-            petty_cash = clean_amount(row.get('Petty Cash', ''))
-            
-            # 跳過沒有金額的記錄
-            if income_amount == 0 and expense_amount == 0:
-                skipped += 1
-                continue
-            
-            record = {
-                'transaction_code': transaction_code,
-                'fiscal_year': fiscal_year,
-                'billing_month': billing_month or f"{fiscal_year}年",
-                'transaction_date': parsed_date,
-                'transaction_item': row.get('交易項目', '').strip() or '未命名交易',
-                'payment_method': row.get('付款方式', '').strip() or None,
-                'income_category': row.get('收入項目', '').strip() or None,
-                'expense_category': row.get('支出項目', '').strip() or None,
-                'income_amount': income_amount,
-                'expense_amount': expense_amount,
-                'petty_cash': petty_cash,
-                'handler': row.get('經手人', '').strip() or None,
-                'reimbursement_status': row.get('申請報銷', '').strip() or None,
-            }
-            
-            records.append(record)
-    
-    print(f"✅ 讀取完成: {len(records)} 筆有效記錄, {skipped} 筆跳過")
-    
-    if not records:
-        print("❌ 沒有有效記錄")
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print('❌ 請設置 NEXT_PUBLIC_SUPABASE_URL 和 NEXT_PUBLIC_SUPABASE_ANON_KEY 環境變量')
         return
     
-    # 按日期排序 (用於生成正確的流水號順序)
-    records.sort(key=lambda x: x['transaction_date'])
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    transactions = []
+    row_count = 0
+    skipped_rows = 0
+    max_seq = 0
+    alpha_seq_count = 0
+    
+    with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        
+        for row in reader:
+            row_count += 1
+            
+            # 跳過前3行（標題行）
+            if row_count <= 3:
+                continue
+            
+            # 確保有足夠的欄位
+            if len(row) < 10:
+                skipped_rows += 1
+                continue
+            
+            try:
+                # 第一列是序號
+                seq_num = clean_text(row[0])
+                
+                # 解析交易日期和交易項目 (必填)
+                transaction_date = parse_date(row[2])  # 第3列是交易日期
+                transaction_item = clean_text(row[3])  # 第4列是交易項目
+                
+                # 如果沒有序號、交易日期或交易項目，跳過
+                if not seq_num or not transaction_date or not transaction_item:
+                    skipped_rows += 1
+                    continue
+                
+                # 格式化 journal_number
+                journal_number = format_journal_number(seq_num)
+                if not journal_number:
+                    print(f'⚠️  行 {row_count}: 無法格式化序號 "{seq_num}"')
+                    skipped_rows += 1
+                    continue
+                
+                # 計算帶字母序號數量
+                if re.match(r'^(\d+)([A-Za-z]+)$', str(seq_num)):
+                    alpha_seq_count += 1
+                
+                # 追蹤最大序號
+                num = extract_max_number(seq_num)
+                if num > max_seq:
+                    max_seq = num
+                
+                # 解析其他字段
+                billing_month = clean_text(row[1])
+                payment_method = clean_text(row[4])
+                income_category = clean_text(row[5])
+                expense_category = clean_text(row[6])
+                income_amount = clean_amount(row[7])
+                expense_amount = clean_amount(row[8])
+                handler = clean_text(row[10]) if len(row) > 10 else None
+                reimbursement_status = clean_text(row[11]) if len(row) > 11 else None
+                fiscal_year = extract_fiscal_year(billing_month)
+                
+                # 根據付款方式設置 deduct_from_petty_cash
+                deduct_from_petty_cash = True
+                
+                transactions.append({
+                    'journal_number': journal_number,
+                    'transaction_code': seq_num,  # 保留原始序號
+                    'billing_month': billing_month,
+                    'transaction_date': transaction_date,
+                    'transaction_item': transaction_item,
+                    'payment_method': payment_method,
+                    'income_category': income_category,
+                    'expense_category': expense_category,
+                    'income_amount': income_amount,
+                    'expense_amount': expense_amount,
+                    'handler': handler,
+                    'reimbursement_status': reimbursement_status,
+                    'fiscal_year': fiscal_year,
+                    'deduct_from_petty_cash': deduct_from_petty_cash,
+                })
+            except Exception as e:
+                print(f'⚠️  行 {row_count} 解析錯誤: {e}')
+                skipped_rows += 1
+                continue
+    
+    print(f'\n📊 CSV解析完成:')
+    print(f'   總行數: {row_count}')
+    print(f'   有效交易: {len(transactions)}')
+    print(f'   帶字母序號: {alpha_seq_count}')
+    print(f'   跳過行數: {skipped_rows}')
+    print(f'   最大序號: {max_seq}')
+    
+    if not transactions:
+        print('❌ 沒有找到有效的交易記錄')
+        return
     
     # 清空現有數據
-    print("\n🗑️ 清空現有數據...")
-    supabase.table('financial_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
-    
-    # 重置流水號序列
-    print("🔄 重置流水號序列...")
-    supabase.table('global_journal_sequence').update({'last_number': 0}).eq('id', 1).execute()
+    print('\n🗑️  清空現有數據...')
+    try:
+        supabase.table('financial_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        print('   ✅ 數據已清空')
+    except Exception as e:
+        print(f'   ⚠️  清空數據時出錯: {e}')
     
     # 批量插入
-    print(f"\n📤 開始導入 {len(records)} 筆記錄...")
-    
+    print('\n📤 開始批量插入...')
     batch_size = 100
-    total_imported = 0
+    success_count = 0
+    error_count = 0
     
-    for i in range(0, len(records), batch_size):
-        batch = records[i:i + batch_size]
+    for i in range(0, len(transactions), batch_size):
+        batch = transactions[i:i+batch_size]
         try:
-            result = supabase.table('financial_transactions').insert(batch).execute()
-            total_imported += len(batch)
-            print(f"  ✅ 已導入: {total_imported}/{len(records)}")
+            supabase.table('financial_transactions').insert(batch).execute()
+            success_count += len(batch)
+            print(f'   ✅ 批次 {i//batch_size + 1}: 插入 {len(batch)} 條記錄')
         except Exception as e:
-            print(f"  ❌ 批次 {i//batch_size + 1} 錯誤: {e}")
-            # 嘗試逐筆插入
-            for record in batch:
-                try:
-                    supabase.table('financial_transactions').insert(record).execute()
-                    total_imported += 1
-                except Exception as e2:
-                    print(f"    ⚠️ 跳過記錄 {record['transaction_code']}: {e2}")
+            error_count += len(batch)
+            print(f'   ❌ 批次 {i//batch_size + 1} 錯誤: {e}')
     
-    print(f"\n{'=' * 60}")
-    print(f"✅ 導入完成！共 {total_imported} 筆記錄")
-    print(f"{'=' * 60}")
+    # 更新序列表
+    print('\n🔢 更新序列表...')
+    try:
+        supabase.table('global_journal_sequence').update({
+            'last_number': max_seq
+        }).eq('id', 1).execute()
+        print(f'   ✅ 序列已更新為: {max_seq}')
+    except Exception as e:
+        print(f'   ⚠️  更新序列時出錯: {e}')
     
-    # 統計摘要
-    print("\n📊 數據摘要:")
-    
-    # 按年份統計
-    year_stats = {}
-    total_income = 0
-    total_expense = 0
-    
-    for r in records:
-        year = r['fiscal_year']
-        if year not in year_stats:
-            year_stats[year] = {'count': 0, 'income': 0, 'expense': 0}
-        year_stats[year]['count'] += 1
-        year_stats[year]['income'] += r['income_amount']
-        year_stats[year]['expense'] += r['expense_amount']
-        total_income += r['income_amount']
-        total_expense += r['expense_amount']
-    
-    for year in sorted(year_stats.keys()):
-        stats = year_stats[year]
-        print(f"  {year}年: {stats['count']} 筆, 收入 ${stats['income']:,.2f}, 支出 ${stats['expense']:,.2f}")
-    
-    print(f"\n  總計: 收入 ${total_income:,.2f}, 支出 ${total_expense:,.2f}")
-    print(f"  淨額: ${total_income - total_expense:,.2f}")
-
+    print(f'\n✅ 導入完成!')
+    print(f'   成功: {success_count}')
+    print(f'   失敗: {error_count}')
+    print(f'   帶字母序號: {alpha_seq_count}')
 
 if __name__ == '__main__':
-    main()
+    csv_path = '/Users/joecheung/Downloads/明家居家護理服務-財務報表 - 副本 - 明家居家護理服務-財務報表 (3).csv'
+    
+    if len(sys.argv) > 1:
+        csv_path = sys.argv[1]
+    
+    if not os.path.exists(csv_path):
+        print(f'❌ 找不到CSV文件: {csv_path}')
+        sys.exit(1)
+    
+    import_csv(csv_path)
