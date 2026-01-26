@@ -72,12 +72,9 @@ export default function AccountingPage() {
     setTransactions(data || [])
   }
 
-  // 篩選流水帳交易：銀行轉賬 OR (現金 + 收入)
+  // 篩選流水帳交易：只有銀行轉賬
   const getLedgerTransactions = () => {
-    let filtered = transactions.filter(t => 
-      t.payment_method === '銀行轉賬' || 
-      (t.payment_method === '現金' && t.income_amount > 0)
-    )
+    let filtered = transactions.filter(t => t.payment_method === '銀行轉賬')
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => t.billing_month === selectedMonth)
@@ -96,11 +93,9 @@ export default function AccountingPage() {
     return filtered
   }
 
-  // 篩選零用金交易：現金 + 支出
+  // 篩選零用金交易：所有現金交易（收入=補充，支出=使用）
   const getPettyCashTransactions = () => {
-    let filtered = transactions.filter(t => 
-      t.payment_method === '現金' && t.expense_amount > 0
-    )
+    let filtered = transactions.filter(t => t.payment_method === '現金')
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => t.billing_month === selectedMonth)
@@ -111,6 +106,7 @@ export default function AccountingPage() {
       filtered = filtered.filter(t =>
         t.transaction_item.toLowerCase().includes(term) ||
         t.transaction_code?.toLowerCase().includes(term) ||
+        t.income_category?.toLowerCase().includes(term) ||
         t.expense_category?.toLowerCase().includes(term)
       )
     }
@@ -148,11 +144,12 @@ export default function AccountingPage() {
     return { totalIncome, totalExpense, net: totalIncome - totalExpense, count: data.length }
   }
 
-  // 零用金統計
+  // 零用金統計：補充(收入) - 支出 = 餘額
   const getPettyCashStats = () => {
     const data = getPettyCashTransactions()
-    const totalExpense = data.reduce((sum, t) => sum + (t.expense_amount || 0), 0)
-    return { totalExpense, count: data.length }
+    const totalIn = data.reduce((sum, t) => sum + (t.income_amount || 0), 0)  // 補充
+    const totalOut = data.reduce((sum, t) => sum + (t.expense_amount || 0), 0) // 支出
+    return { totalIn, totalOut, balance: totalIn - totalOut, count: data.length }
   }
 
   if (loading) {
@@ -297,17 +294,29 @@ export default function AccountingPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="card-apple bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
               <div className="card-apple-content text-center">
                 <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">交易筆數</p>
                 <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{pettyCashStats.count}</p>
               </div>
             </div>
+            <div className="card-apple bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+              <div className="card-apple-content text-center">
+                <p className="text-xs text-green-600 dark:text-green-400 mb-1">總補充</p>
+                <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatCurrency(pettyCashStats.totalIn)}</p>
+              </div>
+            </div>
             <div className="card-apple bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20">
               <div className="card-apple-content text-center">
                 <p className="text-xs text-red-600 dark:text-red-400 mb-1">總支出</p>
-                <p className="text-xl font-bold text-red-700 dark:text-red-300">{formatCurrency(pettyCashStats.totalExpense)}</p>
+                <p className="text-xl font-bold text-red-700 dark:text-red-300">{formatCurrency(pettyCashStats.totalOut)}</p>
+              </div>
+            </div>
+            <div className={`card-apple bg-gradient-to-br ${pettyCashStats.balance >= 0 ? 'from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20' : 'from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20'}`}>
+              <div className="card-apple-content text-center">
+                <p className={`text-xs mb-1 ${pettyCashStats.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>餘額</p>
+                <p className={`text-xl font-bold ${pettyCashStats.balance >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-orange-700 dark:text-orange-300'}`}>{formatCurrency(pettyCashStats.balance)}</p>
               </div>
             </div>
           </div>
@@ -400,9 +409,9 @@ export default function AccountingPage() {
             <div className="card-apple-content p-0">
               <div className="px-4 py-3 border-b border-border-light bg-bg-secondary">
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
-                  <span>💵</span> 零用金支出 - {selectedYear}年{selectedMonth !== 'all' ? selectedMonth.replace(`${selectedYear}年`, '') : '全年'}
+                  <span>💵</span> 零用金帳戶 - {selectedYear}年{selectedMonth !== 'all' ? selectedMonth.replace(`${selectedYear}年`, '') : '全年'}
                 </h3>
-                <p className="text-xs text-text-tertiary mt-1">現金支出記錄</p>
+                <p className="text-xs text-text-tertiary mt-1">現金補充及支出記錄</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -410,42 +419,57 @@ export default function AccountingPage() {
                     <tr className="bg-bg-secondary border-b border-border-light">
                       <th className="px-3 py-2 text-left font-semibold text-text-secondary w-28">編號</th>
                       <th className="px-3 py-2 text-left font-semibold text-text-secondary w-24">日期</th>
-                      <th className="px-3 py-2 text-left font-semibold text-text-secondary">支出項目</th>
+                      <th className="px-3 py-2 text-left font-semibold text-text-secondary">項目</th>
                       <th className="px-3 py-2 text-left font-semibold text-text-secondary w-28">類別</th>
-                      <th className="px-3 py-2 text-left font-semibold text-text-secondary w-24">經手人</th>
-                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">金額</th>
+                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">補充</th>
+                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">支出</th>
+                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
-                    {getPettyCashTransactions().map((txn) => (
-                      <tr key={txn.id} className="hover:bg-bg-secondary/50">
-                        <td className="px-3 py-2 text-primary font-mono text-xs">
-                          {txn.transaction_code || txn.journal_number}
-                        </td>
-                        <td className="px-3 py-2 text-text-primary whitespace-nowrap">
-                          {formatDate(txn.transaction_date)}
-                        </td>
-                        <td className="px-3 py-2 text-text-primary">
-                          <div className="truncate max-w-[300px]" title={txn.transaction_item}>
-                            {txn.transaction_item}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-text-secondary text-xs">
-                          {txn.expense_category || '-'}
-                        </td>
-                        <td className="px-3 py-2 text-text-secondary text-xs">
-                          {txn.handler || '-'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-bold text-error">
-                          {formatCurrency(txn.expense_amount)}
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      let runningBalance = 0
+                      const data = getPettyCashTransactions()
+                      return data.map((txn) => {
+                        runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
+                        return (
+                          <tr key={txn.id} className="hover:bg-bg-secondary/50">
+                            <td className="px-3 py-2 text-primary font-mono text-xs">
+                              {txn.transaction_code || txn.journal_number}
+                            </td>
+                            <td className="px-3 py-2 text-text-primary whitespace-nowrap">
+                              {formatDate(txn.transaction_date)}
+                            </td>
+                            <td className="px-3 py-2 text-text-primary">
+                              <div className="truncate max-w-[250px]" title={txn.transaction_item}>
+                                {txn.transaction_item}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-text-secondary text-xs">
+                              {txn.income_category || txn.expense_category || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-success">
+                              {txn.income_amount > 0 ? formatCurrency(txn.income_amount) : ''}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-error">
+                              {txn.expense_amount > 0 ? formatCurrency(txn.expense_amount) : ''}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
+                              {formatCurrency(runningBalance)}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    })()}
                   </tbody>
                   <tfoot className="bg-bg-secondary border-t-2 border-border-light">
                     <tr>
-                      <td colSpan={5} className="px-3 py-3 text-right font-bold text-text-primary">總支出</td>
-                      <td className="px-3 py-3 text-right font-bold text-error">{formatCurrency(pettyCashStats.totalExpense)}</td>
+                      <td colSpan={4} className="px-3 py-3 text-right font-bold text-text-primary">合計</td>
+                      <td className="px-3 py-3 text-right font-bold text-success">{formatCurrency(pettyCashStats.totalIn)}</td>
+                      <td className="px-3 py-3 text-right font-bold text-error">{formatCurrency(pettyCashStats.totalOut)}</td>
+                      <td className={`px-3 py-3 text-right font-bold ${pettyCashStats.balance >= 0 ? 'text-success' : 'text-error'}`}>
+                        {formatCurrency(pettyCashStats.balance)}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
@@ -453,7 +477,7 @@ export default function AccountingPage() {
               {getPettyCashTransactions().length === 0 && (
                 <div className="text-center py-12 text-text-tertiary">
                   <span className="text-4xl mb-4 block">💵</span>
-                  <p>暫無零用金支出記錄</p>
+                  <p>暫無零用金記錄</p>
                 </div>
               )}
             </div>
