@@ -180,10 +180,14 @@ export default function AccountingPage() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
   }
 
-  // 篩選流水帳交易：銀行轉賬 + 不從零用金扣除的現金支出
+  // 篩選流水帳交易：
+  // 1. 銀行轉賬（所有）
+  // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
+  // 3. 現金支出但明確標記不從零用金扣除的
   const getLedgerTransactions = () => {
     let filtered = transactions.filter(t => 
       t.payment_method === '銀行轉賬' ||
+      !t.payment_method ||  // 付款方式為空的顯示在流水帳
       (t.payment_method === '現金' && t.expense_amount > 0 && t.deduct_from_petty_cash === false)
     )
 
@@ -196,6 +200,7 @@ export default function AccountingPage() {
       filtered = filtered.filter(t =>
         t.transaction_item.toLowerCase().includes(term) ||
         t.transaction_code?.toLowerCase().includes(term) ||
+        t.journal_number?.toLowerCase().includes(term) ||
         t.income_category?.toLowerCase().includes(term) ||
         t.expense_category?.toLowerCase().includes(term)
       )
@@ -220,6 +225,7 @@ export default function AccountingPage() {
       filtered = filtered.filter(t =>
         t.transaction_item.toLowerCase().includes(term) ||
         t.transaction_code?.toLowerCase().includes(term) ||
+        t.journal_number?.toLowerCase().includes(term) ||
         t.income_category?.toLowerCase().includes(term) ||
         t.expense_category?.toLowerCase().includes(term)
       )

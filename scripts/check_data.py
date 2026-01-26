@@ -6,55 +6,36 @@ key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2
 
 supabase = create_client(url, key)
 
-# 檢查所有表的記錄數
-print("=== 數據項目 - 表記錄統計 ===")
-tables = [
-    'auth_user_bridge',
-    'billing_salary_data', 
-    'care_staff_profiles',
-    'clock_records',
-    'commission_rate_introducer',
-    'customer_personal_data',
-    'service_signatures',
-    'signature_files',
-    'voucher_rate',
-    'job_position_options',
-    'language_options',
-    'notifications',
-    'financial_transactions',
-    'global_journal_sequence',
-    'accounting_handlers',
-    'income_categories',
-    'expense_categories',
-    'payment_methods',
-    'reimbursement_statuses'
-]
+# 查找 payment_method 為 NULL 的記錄
+print("=== payment_method 為 NULL 的記錄 ===")
+result = supabase.table('financial_transactions').select('*').is_('payment_method', 'null').execute()
 
-for table in tables:
-    try:
-        result = supabase.table(table).select('*', count='exact').limit(1).execute()
-        print(f"{table}: {result.count} 筆")
-    except Exception as e:
-        print(f"{table}: 表不存在或錯誤 - {str(e)[:50]}")
+print(f"共 {len(result.data)} 筆\n")
+for r in result.data:
+    print(f"序號: {r['journal_number']} | 年份: {r['fiscal_year']} | 日期: {r['transaction_date']}")
+    print(f"  項目: {r['transaction_item']}")
+    print(f"  收入: {r['income_amount']} | 支出: {r['expense_amount']}")
+    print(f"  付款方式: {r['payment_method']} | 收入類別: {r['income_category']} | 支出類別: {r['expense_category']}")
+    print()
 
-# 檢查 financial_transactions 各年數據
-print("\n=== financial_transactions 各年統計 ===")
+# 查找可能有問題的記錄（現金但沒有設置 deduct_from_petty_cash）
+print("\n=== 現金交易但 deduct_from_petty_cash 為 NULL 的記錄 ===")
+result = supabase.table('financial_transactions').select('journal_number, fiscal_year, transaction_item, income_amount, expense_amount, deduct_from_petty_cash').eq('payment_method', '現金').is_('deduct_from_petty_cash', 'null').execute()
+print(f"共 {len(result.data)} 筆")
+
+# 統計各年 deduct_from_petty_cash 的分佈
+print("\n=== 各年 deduct_from_petty_cash 分佈 ===")
 for year in [2024, 2025, 2026]:
-    try:
-        result = supabase.table('financial_transactions').select('*', count='exact').eq('fiscal_year', year).execute()
-        print(f"{year}年: {result.count} 筆")
-    except Exception as e:
-        print(f"{year}年: 錯誤 - {str(e)[:50]}")
-
-# 檢查付款方式分佈
-print("\n=== 2026年付款方式分佈 ===")
-try:
-    result = supabase.table('financial_transactions').select('payment_method').eq('fiscal_year', 2026).execute()
-    methods = {}
+    result = supabase.table('financial_transactions').select('deduct_from_petty_cash', count='exact').eq('fiscal_year', year).execute()
+    
+    stats = {'True': 0, 'False': 0, 'NULL': 0}
     for r in result.data:
-        m = r['payment_method'] or 'NULL'
-        methods[m] = methods.get(m, 0) + 1
-    for m, c in sorted(methods.items(), key=lambda x: -x[1]):
-        print(f"  {m}: {c}")
-except Exception as e:
-    print(f"錯誤: {e}")
+        dfpc = r['deduct_from_petty_cash']
+        if dfpc is True:
+            stats['True'] += 1
+        elif dfpc is False:
+            stats['False'] += 1
+        else:
+            stats['NULL'] += 1
+    
+    print(f"{year}年: True={stats['True']}, False={stats['False']}, NULL={stats['NULL']}")
