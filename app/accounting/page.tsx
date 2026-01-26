@@ -72,12 +72,18 @@ export default function AccountingPage() {
     setTransactions(data || [])
   }
 
+  // 從交易日期提取 YYYY-MM 格式
+  const getMonthFromDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  }
+
   // 篩選流水帳交易：只有銀行轉賬
   const getLedgerTransactions = () => {
     let filtered = transactions.filter(t => t.payment_method === '銀行轉賬')
 
     if (selectedMonth !== 'all') {
-      filtered = filtered.filter(t => t.billing_month === selectedMonth)
+      filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
     }
 
     if (searchTerm) {
@@ -98,7 +104,7 @@ export default function AccountingPage() {
     let filtered = transactions.filter(t => t.payment_method === '現金')
 
     if (selectedMonth !== 'all') {
-      filtered = filtered.filter(t => t.billing_month === selectedMonth)
+      filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
     }
 
     if (searchTerm) {
@@ -130,10 +136,16 @@ export default function AccountingPage() {
     })
   }
 
-  // 取得可用月份
+  // 取得可用月份（從交易日期提取）
   const getAvailableMonths = () => {
-    const months = [...new Set(transactions.map(t => t.billing_month))]
+    const months = [...new Set(transactions.map(t => getMonthFromDate(t.transaction_date)))]
     return months.sort()
+  }
+
+  // 格式化月份顯示
+  const formatMonth = (monthStr: string) => {
+    const [year, month] = monthStr.split('-')
+    return `${year}年${parseInt(month)}月`
   }
 
   // 流水帳統計
@@ -237,7 +249,7 @@ export default function AccountingPage() {
 
               {/* 月份選擇 */}
               <div className="flex-1 min-w-[140px]">
-                <label className="block text-xs font-medium text-text-secondary mb-1">月份</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">月份（按交易日期）</label>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
@@ -245,7 +257,7 @@ export default function AccountingPage() {
                 >
                   <option value="all">全年</option>
                   {getAvailableMonths().map(month => (
-                    <option key={month} value={month}>{month}</option>
+                    <option key={month} value={month}>{formatMonth(month)}</option>
                   ))}
                 </select>
               </div>
@@ -328,9 +340,9 @@ export default function AccountingPage() {
             <div className="card-apple-content p-0">
               <div className="px-4 py-3 border-b border-border-light bg-bg-secondary">
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
-                  <span>🏦</span> 流水帳 - {selectedYear}年{selectedMonth !== 'all' ? selectedMonth.replace(`${selectedYear}年`, '') : '全年'}
+                  <span>🏦</span> 流水帳 - {selectedMonth !== 'all' ? formatMonth(selectedMonth) : `${selectedYear}年全年`}
                 </h3>
-                <p className="text-xs text-text-tertiary mt-1">銀行轉賬及現金收入記錄</p>
+                <p className="text-xs text-text-tertiary mt-1">銀行轉賬記錄</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -409,7 +421,7 @@ export default function AccountingPage() {
             <div className="card-apple-content p-0">
               <div className="px-4 py-3 border-b border-border-light bg-bg-secondary">
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
-                  <span>💵</span> 零用金帳戶 - {selectedYear}年{selectedMonth !== 'all' ? selectedMonth.replace(`${selectedYear}年`, '') : '全年'}
+                  <span>💵</span> 零用金帳戶 - {selectedMonth !== 'all' ? formatMonth(selectedMonth) : `${selectedYear}年全年`}
                 </h3>
                 <p className="text-xs text-text-tertiary mt-1">現金補充及支出記錄</p>
               </div>
