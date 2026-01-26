@@ -224,15 +224,25 @@ export default function AccountingPage() {
     return t.expense_category === 'Petty Cash'
   }
 
+  // 判斷是否為系統調整交易（不在表格中顯示，但計入餘額）
+  const isSystemAdjustment = (t: FinancialTransaction) => {
+    return t.income_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
+  }
+
   // 篩選零用金交易：
   // 1. 現金交易（支出默認從零用金扣除，除非明確設為 false）
   // 2. expense_category = 'Petty Cash'（當作補充顯示）
+  // 注意：系統調整交易不在列表顯示，但計入餘額計算
   const getPettyCashTransactions = () => {
     let filtered = transactions.filter(t => 
-      // 現金交易（排除已標記不從零用金扣除的）
-      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
-      // 或者是 Petty Cash 補充交易
-      isPettyCashReplenishment(t)
+      // 排除系統調整（不在表格顯示）
+      !isSystemAdjustment(t) &&
+      (
+        // 現金交易（排除已標記不從零用金扣除的）
+        (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
+        // 或者是 Petty Cash 補充交易
+        isPettyCashReplenishment(t)
+      )
     )
 
     if (selectedMonth !== 'all') {
@@ -251,6 +261,35 @@ export default function AccountingPage() {
     }
 
     return filtered
+  }
+
+  // 計算零用金期初餘額（包含系統調整和之前月份的交易）
+  const getPettyCashOpeningBalance = () => {
+    if (selectedMonth === 'all') return 0
+    
+    // 獲取所有零用金相關交易（包含系統調整）
+    const allPettyCashTxns = transactions.filter(t => 
+      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
+      isPettyCashReplenishment(t)
+    )
+    
+    // 計算選擇月份之前的餘額
+    let openingBalance = 0
+    allPettyCashTxns.forEach(t => {
+      const txnMonth = getMonthFromDate(t.transaction_date)
+      if (txnMonth < selectedMonth) {
+        const isReplenishment = isPettyCashReplenishment(t)
+        if (isReplenishment) {
+          openingBalance += (t.expense_amount || 0)
+        } else if (isSystemAdjustment(t)) {
+          openingBalance += (t.income_amount || 0)
+        } else {
+          openingBalance += (t.income_amount || 0) - (t.expense_amount || 0)
+        }
+      }
+    })
+    
+    return openingBalance
   }
 
   const formatCurrency = (amount: number) => {
@@ -290,8 +329,11 @@ export default function AccountingPage() {
   }
 
   // 零用金統計：補充(收入 + 零用金補充交易) - 支出 = 餘額
+  // 包含上月結餘
   const getPettyCashStats = () => {
     const data = getPettyCashTransactions()
+    const openingBalance = getPettyCashOpeningBalance()
+    
     // 補充 = 現金收入 + 零用金補充交易的支出金額（銀行轉賬到零用金）
     const totalIn = data.reduce((sum, t) => {
       if (isPettyCashReplenishment(t)) {
@@ -306,7 +348,13 @@ export default function AccountingPage() {
       }
       return sum + (t.expense_amount || 0)
     }, 0)
-    return { totalIn, totalOut, balance: totalIn - totalOut, count: data.length }
+    return { 
+      totalIn, 
+      totalOut, 
+      openingBalance,
+      balance: openingBalance + totalIn - totalOut, 
+      count: data.length 
+    }
   }
 
   // 獲取已排除的現金支出（不在零用金顯示）
@@ -668,7 +716,15 @@ export default function AccountingPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {selectedMonth !== 'all' && pettyCashStats.openingBalance !== 0 && (
+              <div className="card-apple bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
+                <div className="card-apple-content text-center">
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mb-1">上月結餘</p>
+                  <p className={`text-xl font-bold ${pettyCashStats.openingBalance >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-orange-700 dark:text-orange-300'}`}>{formatCurrency(pettyCashStats.openingBalance)}</p>
+                </div>
+              </div>
+            )}
             <div className="card-apple bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
               <div className="card-apple-content text-center">
                 <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">交易筆數</p>
@@ -677,13 +733,13 @@ export default function AccountingPage() {
             </div>
             <div className="card-apple bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
               <div className="card-apple-content text-center">
-                <p className="text-xs text-green-600 dark:text-green-400 mb-1">總補充</p>
+                <p className="text-xs text-green-600 dark:text-green-400 mb-1">本月補充</p>
                 <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatCurrency(pettyCashStats.totalIn)}</p>
               </div>
             </div>
             <div className="card-apple bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20">
               <div className="card-apple-content text-center">
-                <p className="text-xs text-red-600 dark:text-red-400 mb-1">總支出</p>
+                <p className="text-xs text-red-600 dark:text-red-400 mb-1">本月支出</p>
                 <p className="text-xl font-bold text-red-700 dark:text-red-300">{formatCurrency(pettyCashStats.totalOut)}</p>
               </div>
             </div>
@@ -851,7 +907,8 @@ export default function AccountingPage() {
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {(() => {
-                      let runningBalance = 0
+                      // 餘額從上月結餘開始計算
+                      let runningBalance = getPettyCashOpeningBalance()
                       const data = getPettyCashTransactions()
                       return data.map((txn) => {
                         // 計算餘額：零用金補充交易的 expense_amount 算作補充（加），其他算支出（減）
