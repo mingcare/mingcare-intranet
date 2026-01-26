@@ -41,6 +41,14 @@ interface AuditLog {
   notes: string | null
 }
 
+// 類別選項類型
+interface CategoryOption {
+  id: number
+  name: string
+  color?: string
+  is_active: boolean
+}
+
 type ViewMode = 'ledger' | 'petty_cash'
 
 export default function AccountingPage() {
@@ -66,11 +74,19 @@ export default function AccountingPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [selectedTransactionForLog, setSelectedTransactionForLog] = useState<FinancialTransaction | null>(null)
 
+  // 類別選項
+  const [handlers, setHandlers] = useState<CategoryOption[]>([])
+  const [incomeCategories, setIncomeCategories] = useState<CategoryOption[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<CategoryOption[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<CategoryOption[]>([])
+  const [reimbursementStatuses, setReimbursementStatuses] = useState<CategoryOption[]>([])
+
   // 可用年份列表
   const availableYears = [...new Set(transactions.map(t => t.fiscal_year))].sort((a, b) => b - a)
 
   useEffect(() => {
     checkUser()
+    fetchCategories()
   }, [])
 
   useEffect(() => {
@@ -88,6 +104,23 @@ export default function AccountingPage() {
     setCurrentUser(user.email || user.id)
     setLoading(false)
     fetchTransactions()
+  }
+
+  // 載入所有類別選項
+  const fetchCategories = async () => {
+    const [handlersRes, incomeCatRes, expenseCatRes, paymentRes, reimbursementRes] = await Promise.all([
+      supabase.from('accounting_handlers').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('income_categories').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('reimbursement_statuses').select('*').eq('is_active', true).order('sort_order')
+    ])
+
+    if (handlersRes.data) setHandlers(handlersRes.data)
+    if (incomeCatRes.data) setIncomeCategories(incomeCatRes.data)
+    if (expenseCatRes.data) setExpenseCategories(expenseCatRes.data)
+    if (paymentRes.data) setPaymentMethods(paymentRes.data)
+    if (reimbursementRes.data) setReimbursementStatuses(reimbursementRes.data)
   }
 
   const fetchTransactions = async () => {
@@ -902,33 +935,39 @@ export default function AccountingPage() {
                     className="input-apple w-full"
                   >
                     <option value="">請選擇</option>
-                    <option value="現金">現金</option>
-                    <option value="銀行轉賬">銀行轉賬</option>
-                    <option value="Payme">Payme</option>
-                    <option value="支票">支票</option>
+                    {paymentMethods.map(pm => (
+                      <option key={pm.id} value={pm.name}>{pm.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">經手人</label>
-                  <input
-                    type="text"
+                  <select
                     value={editingTransaction.handler || ''}
                     onChange={(e) => setEditingTransaction({ ...editingTransaction, handler: e.target.value })}
                     className="input-apple w-full"
-                  />
+                  >
+                    <option value="">請選擇</option>
+                    {handlers.map(h => (
+                      <option key={h.id} value={h.name}>{h.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">收入類別</label>
-                  <input
-                    type="text"
+                  <select
                     value={editingTransaction.income_category || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_category: e.target.value })}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_category: e.target.value || null })}
                     className="input-apple w-full"
-                    placeholder="如：服務收入、股東資本"
-                  />
+                  >
+                    <option value="">請選擇</option>
+                    {incomeCategories.map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">收入金額</label>
@@ -945,13 +984,16 @@ export default function AccountingPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">支出類別</label>
-                  <input
-                    type="text"
+                  <select
                     value={editingTransaction.expense_category || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_category: e.target.value })}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_category: e.target.value || null })}
                     className="input-apple w-full"
-                    placeholder="如：租金、辦公用品"
-                  />
+                  >
+                    <option value="">請選擇</option>
+                    {expenseCategories.map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">支出金額</label>
@@ -965,20 +1007,37 @@ export default function AccountingPage() {
                 </div>
               </div>
 
-              {editingTransaction.payment_method === '現金' && editingTransaction.expense_amount > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-warning/10 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="deduct_from_petty_cash"
-                    checked={editingTransaction.deduct_from_petty_cash !== false}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, deduct_from_petty_cash: e.target.checked })}
-                    className="w-4 h-4 rounded border-border-light text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="deduct_from_petty_cash" className="text-sm text-warning">
-                    從零用金扣除（取消勾選則顯示在流水帳）
-                  </label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">申請報銷</label>
+                  <select
+                    value={editingTransaction.reimbursement_status || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, reimbursement_status: e.target.value || null })}
+                    className="input-apple w-full"
+                  >
+                    <option value="">請選擇</option>
+                    {reimbursementStatuses.map(status => (
+                      <option key={status.id} value={status.name}>{status.name}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+                <div className="flex items-end">
+                  {editingTransaction.payment_method === '現金' && editingTransaction.expense_amount > 0 && (
+                    <div className="flex items-center gap-3 p-3 bg-warning/10 rounded-lg w-full">
+                      <input
+                        type="checkbox"
+                        id="deduct_from_petty_cash"
+                        checked={editingTransaction.deduct_from_petty_cash !== false}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, deduct_from_petty_cash: e.target.checked })}
+                        className="w-4 h-4 rounded border-border-light text-primary focus:ring-primary"
+                      />
+                      <label htmlFor="deduct_from_petty_cash" className="text-xs text-warning">
+                        從零用金扣除
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">備註</label>
