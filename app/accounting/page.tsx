@@ -107,15 +107,19 @@ export default function AccountingPage() {
     fetchTransactions()
   }
 
-  // 獲取所有可用年份（從數據庫獨立查詢）
+  // 獲取所有可用年份（從交易日期提取）
   const fetchAvailableYears = async () => {
     const { data, error } = await supabase
       .from('financial_transactions')
-      .select('fiscal_year')
+      .select('transaction_date')
       .or('is_deleted.is.null,is_deleted.eq.false')
     
     if (data && !error) {
-      const yearsFromDb = data.map((t: { fiscal_year: number }) => t.fiscal_year as number)
+      // 從 transaction_date 提取年份
+      const yearsFromDb = data.map((t: { transaction_date: string }) => {
+        const date = new Date(t.transaction_date)
+        return date.getFullYear()
+      })
       // 確保至少有 2024, 2025, 2026 年
       const defaultYears = [2024, 2025, 2026]
       const allYears: number[] = Array.from(new Set([...yearsFromDb, ...defaultYears])).sort((a, b) => b - a)
@@ -142,15 +146,21 @@ export default function AccountingPage() {
 
   const fetchTransactions = async () => {
     // 分頁取得所有交易 (Supabase 預設每次最多 1000 筆)
+    // 使用 transaction_date (交易日期) 來過濾年份，而非 fiscal_year
     let allData: FinancialTransaction[] = []
     let offset = 0
     const pageSize = 1000
+
+    // 計算該年份的日期範圍
+    const startDate = `${selectedYear}-01-01`
+    const endDate = `${selectedYear}-12-31`
 
     while (true) {
       const { data, error } = await supabase
         .from('financial_transactions')
         .select('*')
-        .eq('fiscal_year', selectedYear)
+        .gte('transaction_date', startDate)  // 交易日期 >= 年初
+        .lte('transaction_date', endDate)    // 交易日期 <= 年末
         .or('is_deleted.is.null,is_deleted.eq.false')  // 只顯示未刪除的
         .order('transaction_date', { ascending: true })
         .range(offset, offset + pageSize - 1)
