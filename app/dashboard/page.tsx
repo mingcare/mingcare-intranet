@@ -456,7 +456,7 @@ export default function Dashboard() {
     },
     {
       title: '財務會計',
-      description: '財務報表與交易記錄管理',
+      description: '流水帳及零用金管理',
       href: '/accounting',
       icon: (
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
