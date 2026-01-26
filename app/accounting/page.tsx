@@ -191,7 +191,7 @@ export default function AccountingPage() {
   }
 
   // 篩選流水帳交易：
-  // 1. 銀行轉賬（所有）
+  // 1. 銀行轉賬（所有，包括 Petty Cash 補充）
   // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
   // 3. 現金交易但明確標記不從零用金扣除的（收入或支出都包括）
   const getLedgerTransactions = () => {
@@ -219,11 +219,20 @@ export default function AccountingPage() {
     return filtered
   }
 
-  // 篩選零用金交易：現金交易（支出默認從零用金扣除，除非明確設為 false）
+  // 判斷是否為零用金補充交易（expense_category = 'Petty Cash'）
+  const isPettyCashReplenishment = (t: FinancialTransaction) => {
+    return t.expense_category === 'Petty Cash'
+  }
+
+  // 篩選零用金交易：
+  // 1. 現金交易（支出默認從零用金扣除，除非明確設為 false）
+  // 2. expense_category = 'Petty Cash'（當作補充顯示）
   const getPettyCashTransactions = () => {
     let filtered = transactions.filter(t => 
-      t.payment_method === '現金' && 
-      (t.deduct_from_petty_cash !== false)  // null 或 true 都顯示，只有 false 才排除
+      // 現金交易（排除已標記不從零用金扣除的）
+      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
+      // 或者是 Petty Cash 補充交易
+      isPettyCashReplenishment(t)
     )
 
     if (selectedMonth !== 'all') {
@@ -280,11 +289,23 @@ export default function AccountingPage() {
     return { totalIncome, totalExpense, net: totalIncome - totalExpense, count: data.length }
   }
 
-  // 零用金統計：補充(收入) - 支出 = 餘額
+  // 零用金統計：補充(收入 + 零用金補充交易) - 支出 = 餘額
   const getPettyCashStats = () => {
     const data = getPettyCashTransactions()
-    const totalIn = data.reduce((sum, t) => sum + (t.income_amount || 0), 0)  // 補充
-    const totalOut = data.reduce((sum, t) => sum + (t.expense_amount || 0), 0) // 支出
+    // 補充 = 現金收入 + 零用金補充交易的支出金額（銀行轉賬到零用金）
+    const totalIn = data.reduce((sum, t) => {
+      if (isPettyCashReplenishment(t)) {
+        return sum + (t.expense_amount || 0)  // 零用金補充：銀行支出 = 零用金收入
+      }
+      return sum + (t.income_amount || 0)  // 現金收入
+    }, 0)
+    // 支出 = 現金支出（排除零用金補充交易）
+    const totalOut = data.reduce((sum, t) => {
+      if (isPettyCashReplenishment(t)) {
+        return sum  // 零用金補充不算支出
+      }
+      return sum + (t.expense_amount || 0)
+    }, 0)
     return { totalIn, totalOut, balance: totalIn - totalOut, count: data.length }
   }
 
@@ -833,9 +854,15 @@ export default function AccountingPage() {
                       let runningBalance = 0
                       const data = getPettyCashTransactions()
                       return data.map((txn) => {
-                        runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
+                        // 計算餘額：零用金補充交易的 expense_amount 算作補充（加），其他算支出（減）
+                        const isReplenishment = isPettyCashReplenishment(txn)
+                        if (isReplenishment) {
+                          runningBalance += (txn.expense_amount || 0)  // 補充：加
+                        } else {
+                          runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
+                        }
                         return (
-                          <tr key={txn.id} className="hover:bg-bg-secondary/50 cursor-pointer" onClick={() => openEditModal(txn)}>
+                          <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
                               {txn.transaction_code || txn.journal_number}
                             </td>
@@ -845,16 +872,24 @@ export default function AccountingPage() {
                             <td className="px-3 py-2 text-text-primary">
                               <div className="truncate max-w-[180px]" title={txn.transaction_item}>
                                 {txn.transaction_item}
+                                {isReplenishment && (
+                                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-success/10 text-success">補充</span>
+                                )}
                               </div>
                             </td>
                             <td className="px-3 py-2 text-text-secondary text-xs">
                               {txn.income_category || txn.expense_category || '-'}
                             </td>
                             <td className="px-3 py-2 text-right font-mono text-success">
-                              {txn.income_amount > 0 ? formatCurrency(txn.income_amount) : ''}
+                              {/* 補充欄：現金收入 或 零用金補充的支出金額 */}
+                              {isReplenishment 
+                                ? (txn.expense_amount > 0 ? formatCurrency(txn.expense_amount) : '')
+                                : (txn.income_amount > 0 ? formatCurrency(txn.income_amount) : '')
+                              }
                             </td>
                             <td className="px-3 py-2 text-right font-mono text-error">
-                              {txn.expense_amount > 0 ? formatCurrency(txn.expense_amount) : ''}
+                              {/* 支出欄：非補充交易的支出 */}
+                              {!isReplenishment && txn.expense_amount > 0 ? formatCurrency(txn.expense_amount) : ''}
                             </td>
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
@@ -888,7 +923,8 @@ export default function AccountingPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                                {/* 現金交易可移至流水帳 */}
+                                {/* 現金交易可移至流水帳（零用金補充交易不顯示此按鈕） */}
+                                {!isReplenishment && (
                                 <button
                                   onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
                                   className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
@@ -898,6 +934,7 @@ export default function AccountingPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                   </svg>
                                 </button>
+                                )}
                               </div>
                             </td>
                           </tr>
