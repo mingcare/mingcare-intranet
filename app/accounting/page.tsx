@@ -124,19 +124,37 @@ export default function AccountingPage() {
   }
 
   const fetchTransactions = async () => {
-    const { data, error } = await supabase
-      .from('financial_transactions')
-      .select('*')
-      .eq('fiscal_year', selectedYear)
-      .or('is_deleted.is.null,is_deleted.eq.false')  // 只顯示未刪除的
-      .order('transaction_date', { ascending: true })
+    // 分頁取得所有交易 (Supabase 預設每次最多 1000 筆)
+    let allData: FinancialTransaction[] = []
+    let offset = 0
+    const pageSize = 1000
 
-    if (error) {
-      console.error('Error fetching transactions:', error)
-      return
+    while (true) {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .eq('fiscal_year', selectedYear)
+        .or('is_deleted.is.null,is_deleted.eq.false')  // 只顯示未刪除的
+        .order('transaction_date', { ascending: true })
+        .range(offset, offset + pageSize - 1)
+
+      if (error) {
+        console.error('Error fetching transactions:', error)
+        return
+      }
+
+      if (data) {
+        allData = [...allData, ...data]
+      }
+
+      // 如果取得的數據少於 pageSize，表示已經取完
+      if (!data || data.length < pageSize) {
+        break
+      }
+      offset += pageSize
     }
 
-    setTransactions(data || [])
+    setTransactions(allData)
   }
 
   // 從交易日期提取 YYYY-MM 格式
@@ -169,11 +187,11 @@ export default function AccountingPage() {
     return filtered
   }
 
-  // 篩選零用金交易：現金交易且 deduct_from_petty_cash = true
+  // 篩選零用金交易：現金交易（支出默認從零用金扣除，除非明確設為 false）
   const getPettyCashTransactions = () => {
     let filtered = transactions.filter(t => 
       t.payment_method === '現金' && 
-      (t.deduct_from_petty_cash === true || t.income_amount > 0)  // 支出需要檢查，收入(補充)全部顯示
+      (t.deduct_from_petty_cash !== false)  // null 或 true 都顯示，只有 false 才排除
     )
 
     if (selectedMonth !== 'all') {
