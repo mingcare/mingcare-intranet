@@ -81,12 +81,13 @@ export default function AccountingPage() {
   const [paymentMethods, setPaymentMethods] = useState<CategoryOption[]>([])
   const [reimbursementStatuses, setReimbursementStatuses] = useState<CategoryOption[]>([])
 
-  // 可用年份列表
-  const availableYears = [...new Set(transactions.map(t => t.fiscal_year))].sort((a, b) => b - a)
+  // 可用年份列表 - 獨立從數據庫獲取
+  const [availableYears, setAvailableYears] = useState<number[]>([2024, 2025, 2026])
 
   useEffect(() => {
     checkUser()
     fetchCategories()
+    fetchAvailableYears()
   }, [])
 
   useEffect(() => {
@@ -104,6 +105,22 @@ export default function AccountingPage() {
     setCurrentUser(user.email || user.id)
     setLoading(false)
     fetchTransactions()
+  }
+
+  // 獲取所有可用年份（從數據庫獨立查詢）
+  const fetchAvailableYears = async () => {
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .select('fiscal_year')
+      .or('is_deleted.is.null,is_deleted.eq.false')
+    
+    if (data && !error) {
+      const yearsFromDb = data.map((t: { fiscal_year: number }) => t.fiscal_year as number)
+      // 確保至少有 2024, 2025, 2026 年
+      const defaultYears = [2024, 2025, 2026]
+      const allYears: number[] = Array.from(new Set([...yearsFromDb, ...defaultYears])).sort((a, b) => b - a)
+      setAvailableYears(allYears)
+    }
   }
 
   // 載入所有類別選項
@@ -549,7 +566,7 @@ export default function AccountingPage() {
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
                   className="input-apple w-full"
                 >
-                  {(availableYears.length > 0 ? availableYears : [2024, 2025, 2026]).map(year => (
+                  {availableYears.map(year => (
                     <option key={year} value={year}>{year}年</option>
                   ))}
                 </select>
@@ -575,7 +592,7 @@ export default function AccountingPage() {
                 <label className="block text-xs font-medium text-text-secondary mb-1">搜尋</label>
                 <input
                   type="text"
-                  placeholder="搜尋交易項目、編號..."
+                  placeholder="搜尋交易項目、編號、收入/支出類別..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="input-apple w-full"
