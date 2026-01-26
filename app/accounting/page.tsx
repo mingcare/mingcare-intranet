@@ -193,12 +193,12 @@ export default function AccountingPage() {
   // 篩選流水帳交易：
   // 1. 銀行轉賬（所有）
   // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
-  // 3. 現金支出但明確標記不從零用金扣除的
+  // 3. 現金交易但明確標記不從零用金扣除的（收入或支出都包括）
   const getLedgerTransactions = () => {
     let filtered = transactions.filter(t => 
       t.payment_method === '銀行轉賬' ||
       !t.payment_method ||  // 付款方式為空的顯示在流水帳
-      (t.payment_method === '現金' && t.expense_amount > 0 && t.deduct_from_petty_cash === false)
+      (t.payment_method === '現金' && t.deduct_from_petty_cash === false)  // 現金但不從零用金扣除
     )
 
     if (selectedMonth !== 'all') {
@@ -888,17 +888,16 @@ export default function AccountingPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                                {txn.expense_amount > 0 && (
-                                  <button
-                                    onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
-                                    className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
-                                    title="移至流水帳"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                    </svg>
-                                  </button>
-                                )}
+                                {/* 現金交易可移至流水帳 */}
+                                <button
+                                  onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
+                                  className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
+                                  title="移至流水帳"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                  </svg>
+                                </button>
                               </div>
                             </td>
                           </tr>
