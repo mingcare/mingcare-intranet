@@ -83,11 +83,15 @@ export default function AccountingPage() {
 
   // 可用年份列表 - 獨立從數據庫獲取
   const [availableYears, setAvailableYears] = useState<number[]>([2024, 2025, 2026])
+  
+  // 零用金歷史累計餘額（用於計算上月結餘）
+  const [pettyCashHistoricalBalance, setPettyCashHistoricalBalance] = useState<Record<string, number>>({})
 
   useEffect(() => {
     checkUser()
     fetchCategories()
     fetchAvailableYears()
+    fetchPettyCashHistoricalBalance()
   }, [])
 
   useEffect(() => {
@@ -125,6 +129,65 @@ export default function AccountingPage() {
       const allYears: number[] = Array.from(new Set([...yearsFromDb, ...defaultYears])).sort((a, b) => b - a)
       setAvailableYears(allYears)
     }
+  }
+
+  // 獲取零用金歷史累計餘額（按月份計算）
+  const fetchPettyCashHistoricalBalance = async () => {
+    // 獲取所有現金交易
+    let allData: FinancialTransaction[] = []
+    let offset = 0
+    const pageSize = 1000
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('transaction_date', { ascending: true })
+        .range(offset, offset + pageSize - 1)
+
+      if (error) {
+        console.error('Error fetching historical balance:', error)
+        return
+      }
+
+      if (data) {
+        allData = [...allData, ...data]
+      }
+
+      if (!data || data.length < pageSize) {
+        break
+      }
+      offset += pageSize
+    }
+
+    // 篩選零用金相關交易
+    const pettyCashTxns = allData.filter(t => 
+      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
+      t.expense_category === 'Petty Cash'
+    )
+
+    // 按月份計算累計餘額
+    const monthlyBalance: Record<string, number> = {}
+    let runningBalance = 0
+
+    pettyCashTxns.forEach(t => {
+      const txnMonth = t.transaction_date.substring(0, 7) // YYYY-MM
+      const isReplenishment = t.expense_category === 'Petty Cash'
+      const isAdjustment = t.income_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
+      
+      if (isReplenishment) {
+        runningBalance += (t.expense_amount || 0)
+      } else if (isAdjustment) {
+        runningBalance += (t.income_amount || 0)
+      } else {
+        runningBalance += (t.income_amount || 0) - (t.expense_amount || 0)
+      }
+      
+      monthlyBalance[txnMonth] = runningBalance
+    })
+
+    setPettyCashHistoricalBalance(monthlyBalance)
   }
 
   // 載入所有類別選項
@@ -263,31 +326,34 @@ export default function AccountingPage() {
     return filtered
   }
 
-  // 計算零用金期初餘額（包含系統調整和之前月份的交易）
+  // 計算零用金期初餘額（使用歷史累計數據）
   const getPettyCashOpeningBalance = () => {
     if (selectedMonth === 'all') return 0
     
-    // 獲取所有零用金相關交易（包含系統調整）
-    const allPettyCashTxns = transactions.filter(t => 
-      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
-      isPettyCashReplenishment(t)
-    )
+    // 找到選擇月份的上一個月
+    const [year, month] = selectedMonth.split('-').map(Number)
+    let prevYear = year
+    let prevMonth = month - 1
     
-    // 計算選擇月份之前的餘額
+    if (prevMonth === 0) {
+      prevMonth = 12
+      prevYear -= 1
+    }
+    
+    const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`
+    
+    // 從歷史累計餘額中獲取上月結餘
+    // 需要找到 <= prevMonthKey 的最近一個月的餘額
+    const sortedMonths = Object.keys(pettyCashHistoricalBalance).sort()
     let openingBalance = 0
-    allPettyCashTxns.forEach(t => {
-      const txnMonth = getMonthFromDate(t.transaction_date)
-      if (txnMonth < selectedMonth) {
-        const isReplenishment = isPettyCashReplenishment(t)
-        if (isReplenishment) {
-          openingBalance += (t.expense_amount || 0)
-        } else if (isSystemAdjustment(t)) {
-          openingBalance += (t.income_amount || 0)
-        } else {
-          openingBalance += (t.income_amount || 0) - (t.expense_amount || 0)
-        }
+    
+    for (const m of sortedMonths) {
+      if (m <= prevMonthKey) {
+        openingBalance = pettyCashHistoricalBalance[m]
+      } else {
+        break
       }
-    })
+    }
     
     return openingBalance
   }
