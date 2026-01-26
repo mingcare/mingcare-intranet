@@ -21,7 +21,24 @@ interface FinancialTransaction {
   handler: string | null
   reimbursement_status: string | null
   notes: string | null
-  deduct_from_petty_cash: boolean | null  // 是否從零用金扣除
+  deduct_from_petty_cash: boolean | null
+  is_deleted?: boolean
+  created_by?: string
+  updated_by?: string
+}
+
+// 審計日誌類型
+interface AuditLog {
+  id: string
+  transaction_id: string
+  journal_number: string
+  action_type: string
+  changed_fields: string[]
+  old_values: Record<string, any>
+  new_values: Record<string, any>
+  performed_by: string
+  performed_at: string
+  notes: string | null
 }
 
 type ViewMode = 'ledger' | 'petty_cash'
@@ -35,6 +52,19 @@ export default function AccountingPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('ledger')
   const [showExcludedModal, setShowExcludedModal] = useState(false)
+  
+  // 編輯相關狀態
+  const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [transactionToDelete, setTransactionToDelete] = useState<FinancialTransaction | null>(null)
+  const [currentUser, setCurrentUser] = useState<string>('')
+  const [saving, setSaving] = useState(false)
+  
+  // 審計日誌
+  const [showAuditLog, setShowAuditLog] = useState(false)
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [selectedTransactionForLog, setSelectedTransactionForLog] = useState<FinancialTransaction | null>(null)
 
   // 可用年份列表
   const availableYears = [...new Set(transactions.map(t => t.fiscal_year))].sort((a, b) => b - a)
@@ -55,6 +85,7 @@ export default function AccountingPage() {
       router.push('/')
       return
     }
+    setCurrentUser(user.email || user.id)
     setLoading(false)
     fetchTransactions()
   }
@@ -64,6 +95,7 @@ export default function AccountingPage() {
       .from('financial_transactions')
       .select('*')
       .eq('fiscal_year', selectedYear)
+      .or('is_deleted.is.null,is_deleted.eq.false')  // 只顯示未刪除的
       .order('transaction_date', { ascending: true })
 
     if (error) {
@@ -205,6 +237,188 @@ export default function AccountingPage() {
 
     // 重新載入數據
     fetchTransactions()
+  }
+
+  // 開啟編輯 Modal
+  const openEditModal = (txn: FinancialTransaction) => {
+    setEditingTransaction({ ...txn })
+    setShowEditModal(true)
+  }
+
+  // 儲存編輯
+  const saveTransaction = async () => {
+    if (!editingTransaction) return
+    
+    setSaving(true)
+    
+    // 找出原始交易
+    const originalTxn = transactions.find(t => t.id === editingTransaction.id)
+    if (!originalTxn) {
+      alert('找不到原始交易')
+      setSaving(false)
+      return
+    }
+
+    // 計算變更的欄位
+    const changedFields: string[] = []
+    const oldValues: Record<string, any> = {}
+    const newValues: Record<string, any> = {}
+    
+    const fieldsToCheck = [
+      'transaction_date', 'transaction_item', 'payment_method',
+      'income_category', 'income_amount', 'expense_category', 'expense_amount',
+      'handler', 'notes', 'deduct_from_petty_cash'
+    ]
+    
+    fieldsToCheck.forEach(field => {
+      const oldVal = (originalTxn as any)[field]
+      const newVal = (editingTransaction as any)[field]
+      if (oldVal !== newVal) {
+        changedFields.push(field)
+        oldValues[field] = oldVal
+        newValues[field] = newVal
+      }
+    })
+
+    if (changedFields.length === 0) {
+      setShowEditModal(false)
+      setSaving(false)
+      return
+    }
+
+    // 更新交易
+    const { error: updateError } = await supabase
+      .from('financial_transactions')
+      .update({
+        transaction_date: editingTransaction.transaction_date,
+        transaction_item: editingTransaction.transaction_item,
+        payment_method: editingTransaction.payment_method,
+        income_category: editingTransaction.income_category,
+        income_amount: editingTransaction.income_amount,
+        expense_category: editingTransaction.expense_category,
+        expense_amount: editingTransaction.expense_amount,
+        handler: editingTransaction.handler,
+        notes: editingTransaction.notes,
+        deduct_from_petty_cash: editingTransaction.deduct_from_petty_cash,
+        updated_by: currentUser
+      })
+      .eq('id', editingTransaction.id)
+
+    if (updateError) {
+      console.error('Error updating:', updateError)
+      alert('更新失敗')
+      setSaving(false)
+      return
+    }
+
+    // 記錄審計日誌
+    await supabase.from('financial_audit_log').insert({
+      transaction_id: editingTransaction.id,
+      journal_number: editingTransaction.journal_number,
+      action_type: 'update',
+      changed_fields: changedFields,
+      old_values: oldValues,
+      new_values: newValues,
+      performed_by: currentUser
+    })
+
+    setShowEditModal(false)
+    setSaving(false)
+    fetchTransactions()
+  }
+
+  // 確認刪除
+  const confirmDelete = (txn: FinancialTransaction) => {
+    setTransactionToDelete(txn)
+    setShowDeleteConfirm(true)
+  }
+
+  // 執行刪除（軟刪除）
+  const deleteTransaction = async () => {
+    if (!transactionToDelete) return
+    
+    setSaving(true)
+
+    // 軟刪除
+    const { error: deleteError } = await supabase
+      .from('financial_transactions')
+      .update({
+        is_deleted: true,
+        deleted_by: currentUser,
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', transactionToDelete.id)
+
+    if (deleteError) {
+      console.error('Error deleting:', deleteError)
+      alert('刪除失敗')
+      setSaving(false)
+      return
+    }
+
+    // 記錄審計日誌
+    await supabase.from('financial_audit_log').insert({
+      transaction_id: transactionToDelete.id,
+      journal_number: transactionToDelete.journal_number,
+      action_type: 'delete',
+      changed_fields: ['is_deleted'],
+      old_values: { is_deleted: false },
+      new_values: { is_deleted: true },
+      performed_by: currentUser
+    })
+
+    setShowDeleteConfirm(false)
+    setTransactionToDelete(null)
+    setSaving(false)
+    fetchTransactions()
+  }
+
+  // 查看審計日誌
+  const viewAuditLog = async (txn: FinancialTransaction) => {
+    setSelectedTransactionForLog(txn)
+    
+    const { data, error } = await supabase
+      .from('financial_audit_log')
+      .select('*')
+      .eq('transaction_id', txn.id)
+      .order('performed_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching audit log:', error)
+      return
+    }
+
+    setAuditLogs(data || [])
+    setShowAuditLog(true)
+  }
+
+  // 格式化審計日誌的欄位名稱
+  const formatFieldName = (field: string) => {
+    const fieldNames: Record<string, string> = {
+      transaction_date: '交易日期',
+      transaction_item: '交易項目',
+      payment_method: '付款方式',
+      income_category: '收入類別',
+      income_amount: '收入金額',
+      expense_category: '支出類別',
+      expense_amount: '支出金額',
+      handler: '經手人',
+      notes: '備註',
+      deduct_from_petty_cash: '從零用金扣除',
+      is_deleted: '已刪除'
+    }
+    return fieldNames[field] || field
+  }
+
+  // 格式化審計日誌的操作類型
+  const formatActionType = (action: string) => {
+    const actions: Record<string, { text: string, color: string }> = {
+      create: { text: '新增', color: 'text-success' },
+      update: { text: '修改', color: 'text-warning' },
+      delete: { text: '刪除', color: 'text-error' },
+      restore: { text: '還原', color: 'text-primary' }
+    }
+    return actions[action] || { text: action, color: 'text-text-secondary' }
   }
 
   if (loading) {
@@ -397,8 +611,8 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-left font-semibold text-text-secondary w-24">類別</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">收入</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">支出</th>
-                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-32">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-20">操作</th>
+                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-32">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -409,7 +623,7 @@ export default function AccountingPage() {
                         runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
                         const isCashExpenseFromLedger = txn.payment_method === '現金' && txn.expense_amount > 0 && txn.deduct_from_petty_cash === false
                         return (
-                          <tr key={txn.id} className="hover:bg-bg-secondary/50">
+                          <tr key={txn.id} className="hover:bg-bg-secondary/50 cursor-pointer" onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-text-tertiary font-mono text-xs">
                               {txn.journal_number}
                             </td>
@@ -417,7 +631,7 @@ export default function AccountingPage() {
                               {formatDate(txn.transaction_date)}
                             </td>
                             <td className="px-3 py-2 text-text-primary">
-                              <div className="truncate max-w-[250px]" title={txn.transaction_item}>
+                              <div className="truncate max-w-[200px]" title={txn.transaction_item}>
                                 {txn.transaction_item}
                                 {isCashExpenseFromLedger && (
                                   <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">現金</span>
@@ -436,19 +650,47 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
-                            <td className="px-3 py-2 text-center">
-                              {/* 只有現金支出(非零用金)才能移回 */}
-                              {isCashExpenseFromLedger ? (
+                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
                                 <button
-                                  onClick={() => toggleDeductFromPettyCash(txn.id, false, txn.transaction_item)}
-                                  className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                                  title="移回零用金"
+                                  onClick={() => openEditModal(txn)}
+                                  className="p-1.5 rounded hover:bg-primary/10 text-primary transition-colors"
+                                  title="編輯"
                                 >
-                                  移回零用金
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
                                 </button>
-                              ) : (
-                                <span className="text-text-quaternary text-xs">-</span>
-                              )}
+                                <button
+                                  onClick={() => viewAuditLog(txn)}
+                                  className="p-1.5 rounded hover:bg-info/10 text-info transition-colors"
+                                  title="查看記錄"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => confirmDelete(txn)}
+                                  className="p-1.5 rounded hover:bg-error/10 text-error transition-colors"
+                                  title="刪除"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                                {isCashExpenseFromLedger && (
+                                  <button
+                                    onClick={() => toggleDeductFromPettyCash(txn.id, false, txn.transaction_item)}
+                                    className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
+                                    title="移回零用金"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -498,8 +740,8 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-left font-semibold text-text-secondary w-28">類別</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">補充</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">支出</th>
-                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-20">操作</th>
+                      <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">餘額</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-32">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -509,7 +751,7 @@ export default function AccountingPage() {
                       return data.map((txn) => {
                         runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
                         return (
-                          <tr key={txn.id} className="hover:bg-bg-secondary/50">
+                          <tr key={txn.id} className="hover:bg-bg-secondary/50 cursor-pointer" onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
                               {txn.transaction_code || txn.journal_number}
                             </td>
@@ -517,7 +759,7 @@ export default function AccountingPage() {
                               {formatDate(txn.transaction_date)}
                             </td>
                             <td className="px-3 py-2 text-text-primary">
-                              <div className="truncate max-w-[250px]" title={txn.transaction_item}>
+                              <div className="truncate max-w-[180px]" title={txn.transaction_item}>
                                 {txn.transaction_item}
                               </div>
                             </td>
@@ -533,19 +775,47 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
-                            <td className="px-3 py-2 text-center">
-                              {/* 只有現金支出才能移至流水帳 */}
-                              {txn.expense_amount > 0 ? (
+                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
                                 <button
-                                  onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
-                                  className="text-xs px-2 py-1 rounded bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
-                                  title="移至流水帳"
+                                  onClick={() => openEditModal(txn)}
+                                  className="p-1.5 rounded hover:bg-primary/10 text-primary transition-colors"
+                                  title="編輯"
                                 >
-                                  移至流水帳
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
                                 </button>
-                              ) : (
-                                <span className="text-text-quaternary text-xs">-</span>
-                              )}
+                                <button
+                                  onClick={() => viewAuditLog(txn)}
+                                  className="p-1.5 rounded hover:bg-info/10 text-info transition-colors"
+                                  title="查看記錄"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => confirmDelete(txn)}
+                                  className="p-1.5 rounded hover:bg-error/10 text-error transition-colors"
+                                  title="刪除"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                                {txn.expense_amount > 0 && (
+                                  <button
+                                    onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
+                                    className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
+                                    title="移至流水帳"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -575,6 +845,282 @@ export default function AccountingPage() {
           </div>
         )}
       </main>
+
+      {/* 編輯交易 Modal */}
+      {showEditModal && editingTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-bg-primary rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-bg-primary px-6 py-4 border-b border-border-light flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">編輯交易</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
+              >
+                <svg className="w-5 h-5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">流水號</label>
+                  <input
+                    type="text"
+                    value={editingTransaction.journal_number}
+                    disabled
+                    className="input-apple w-full bg-bg-secondary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">交易日期</label>
+                  <input
+                    type="date"
+                    value={editingTransaction.transaction_date}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_date: e.target.value })}
+                    className="input-apple w-full"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">交易項目</label>
+                <input
+                  type="text"
+                  value={editingTransaction.transaction_item}
+                  onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_item: e.target.value })}
+                  className="input-apple w-full"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">付款方式</label>
+                  <select
+                    value={editingTransaction.payment_method || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, payment_method: e.target.value })}
+                    className="input-apple w-full"
+                  >
+                    <option value="">請選擇</option>
+                    <option value="現金">現金</option>
+                    <option value="銀行轉賬">銀行轉賬</option>
+                    <option value="Payme">Payme</option>
+                    <option value="支票">支票</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">經手人</label>
+                  <input
+                    type="text"
+                    value={editingTransaction.handler || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, handler: e.target.value })}
+                    className="input-apple w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">收入類別</label>
+                  <input
+                    type="text"
+                    value={editingTransaction.income_category || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_category: e.target.value })}
+                    className="input-apple w-full"
+                    placeholder="如：服務收入、股東資本"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">收入金額</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingTransaction.income_amount || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_amount: parseFloat(e.target.value) || 0 })}
+                    className="input-apple w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">支出類別</label>
+                  <input
+                    type="text"
+                    value={editingTransaction.expense_category || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_category: e.target.value })}
+                    className="input-apple w-full"
+                    placeholder="如：租金、辦公用品"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">支出金額</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingTransaction.expense_amount || ''}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_amount: parseFloat(e.target.value) || 0 })}
+                    className="input-apple w-full"
+                  />
+                </div>
+              </div>
+
+              {editingTransaction.payment_method === '現金' && editingTransaction.expense_amount > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-warning/10 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="deduct_from_petty_cash"
+                    checked={editingTransaction.deduct_from_petty_cash !== false}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, deduct_from_petty_cash: e.target.checked })}
+                    className="w-4 h-4 rounded border-border-light text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="deduct_from_petty_cash" className="text-sm text-warning">
+                    從零用金扣除（取消勾選則顯示在流水帳）
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">備註</label>
+                <textarea
+                  value={editingTransaction.notes || ''}
+                  onChange={(e) => setEditingTransaction({ ...editingTransaction, notes: e.target.value })}
+                  className="input-apple w-full h-20 resize-none"
+                />
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-bg-primary px-6 py-4 border-t border-border-light flex justify-end gap-3">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 rounded-lg border border-border-light text-text-secondary hover:bg-bg-secondary transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveTransaction}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+              >
+                {saving ? '儲存中...' : '儲存變更'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 刪除確認 Modal */}
+      {showDeleteConfirm && transactionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-bg-primary rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-text-primary mb-2">確定刪除？</h3>
+              <p className="text-sm text-text-secondary mb-4">
+                即將刪除交易「{transactionToDelete.transaction_item}」
+              </p>
+              <p className="text-xs text-text-tertiary mb-6">
+                流水號：{transactionToDelete.journal_number}<br/>
+                此操作將被記錄，可由管理員還原
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setTransactionToDelete(null)
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg border border-border-light text-text-secondary hover:bg-bg-secondary transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={deleteTransaction}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-lg bg-error text-white hover:bg-error/90 transition-colors disabled:opacity-50"
+                >
+                  {saving ? '刪除中...' : '確定刪除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 審計日誌 Modal */}
+      {showAuditLog && selectedTransactionForLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-bg-primary rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-bg-primary px-6 py-4 border-b border-border-light flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary">修改記錄</h2>
+                <p className="text-xs text-text-tertiary">
+                  流水號：{selectedTransactionForLog.journal_number}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAuditLog(false)}
+                className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
+              >
+                <svg className="w-5 h-5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              {auditLogs.length === 0 ? (
+                <div className="text-center py-8 text-text-tertiary">
+                  <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p>暫無修改記錄</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {auditLogs.map((log) => {
+                    const actionInfo = formatActionType(log.action_type)
+                    return (
+                      <div key={log.id} className="border border-border-light rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className={`text-sm font-semibold ${actionInfo.color}`}>
+                            {actionInfo.text}
+                          </span>
+                          <span className="text-xs text-text-tertiary">
+                            {new Date(log.performed_at).toLocaleString('zh-HK')}
+                          </span>
+                        </div>
+                        <div className="text-xs text-text-secondary mb-2">
+                          操作者：{log.performed_by}
+                        </div>
+                        {log.changed_fields && log.changed_fields.length > 0 && (
+                          <div className="space-y-2">
+                            {log.changed_fields.map((field) => (
+                              <div key={field} className="bg-bg-secondary rounded p-2 text-xs">
+                                <span className="font-medium text-text-primary">{formatFieldName(field)}</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-error line-through">
+                                    {log.old_values?.[field]?.toString() || '(空)'}
+                                  </span>
+                                  <span className="text-text-quaternary">→</span>
+                                  <span className="text-success">
+                                    {log.new_values?.[field]?.toString() || '(空)'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
