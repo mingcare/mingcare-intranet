@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
-import BackToHomeButton from '../../components/BackToHomeButton'
+import { BackToHomeButton } from '../../components/BackToHomeButton'
 
 interface FinancialTransaction {
   id: string
