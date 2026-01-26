@@ -1,6 +1,6 @@
 ========================================================================
 明護 Supabase 數據庫架構文檔 — 雙項目系統
-更新日期: 2026-01-15
+更新日期: 2026-01-26
 ========================================================================
 
 本系統採用雙 Supabase 項目架構：
@@ -57,13 +57,13 @@ API Keys：
 ========================================================================
 項目二：數據項目 (Data Project) 
 項目網址: https://cvkxlvdicympakfecgvv.supabase.co
-用途: 業務數據存儲、客戶管理、員工資料、服務記錄
-更新日期: 2026-01-15
+用途: 業務數據存儲、客戶管理、員工資料、服務記錄、財務會計
+更新日期: 2026-01-26
 ========================================================================
 
 🏥 項目 2: 明家居家護理服務 Intranet (數據項目)
 ================================================
-用途: 儲存業務數據（客戶管理、護理服務、護理人員、工資計算等）
+用途: 儲存業務數據（客戶管理、護理服務、護理人員、工資計算、財務會計等）
 
 數據庫連接信息：
 - Host: db.cvkxlvdicympakfecgvv.supabase.co
@@ -158,7 +158,7 @@ copay_level = 自付比例等級
 - created_at (timestamptz, default now()) = 建立時間
 - updated_at (timestamptz, default now()) = 更新時間
 
-### [public.billing_salary_data] — 客戶收費及護理人員工資表 (4,151條記錄)
+### [public.billing_salary_data] — 客戶收費及護理人員工資表 (4,169條記錄)
 - id (uuid, NOT NULL, default uuid_generate_v4()) = 系統 ID
 - service_date (date) = 服務日期
 - customer_id (text) = 項目編號
@@ -180,7 +180,7 @@ copay_level = 自付比例等級
 - created_at (timestamptz, default now()) = 建立時間
 - updated_at (timestamptz, default now()) = 更新時間
 
-### [public.care_staff_profiles] — 護理人員檔案表 (244條記錄)
+### [public.care_staff_profiles] — 護理人員檔案表 (250條記錄)
 - id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
 - staff_id (text) = 員工編號
 - name_chinese (text) = 中文姓名
@@ -249,7 +249,7 @@ copay_level = 自付比例等級
 - created_at (timestamptz, default now()) = 建立時間
 - updated_at (timestamptz, default now()) = 更新時間
 
-### [public.commission_rate_introducer] — 介紹人佣金費率表 (5條記錄)
+### [public.commission_rate_introducer] — 介紹人佣金費率表 (6條記錄)
 **用途**: 存儲不同介紹人的佣金費率設定，區分首月和後續月份
 - id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
 - introducer (introducer_enum, NOT NULL) = 介紹人姓名
@@ -265,7 +265,7 @@ copay_level = 自付比例等級
 | Janet | $700 | $700 |
 | 曾先生 | $1000 | $500 |
 
-### [public.customer_personal_data] — 客戶個人資料表 (155條記錄)
+### [public.customer_personal_data] — 客戶個人資料表 (156條記錄)
 **用途**: 存儲客戶的詳細個人資料和服務資訊
 - id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
 - customer_id (text) = 項目編號
@@ -417,6 +417,94 @@ copay_level = 自付比例等級
 | HC-家居服務 | $150 |
 | PC-到⼾看顧(輔助⼈員) | $248 |
 | RT-復康運動(OTA輔助⼈員) | $248 |
+
+### [public.financial_transactions] — 財務交易記錄表 (1,785條記錄) 🆕
+**用途**: 存儲公司所有財務交易記錄，包括收入和支出
+- id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
+- journal_number (varchar(20)) = 流水號: 00000001, 00000002...
+- transaction_code (varchar(30)) = 原始編號: 2024-05-001
+- fiscal_year (integer, NOT NULL) = 所屬年份: 2024, 2025, 2026
+- billing_month (varchar(20), NOT NULL) = 帳單月份: 2024年5月
+- transaction_date (date, NOT NULL) = 交易日期
+- transaction_item (text, NOT NULL) = 交易項目描述
+- payment_method (varchar(50)) = 付款方式: 現金, 銀行轉賬, Payme...
+- income_category (varchar(100)) = 收入類別: 服務收入, 股東資本...
+- income_amount (decimal(12,2), default 0) = 收入金額
+- expense_category (varchar(100)) = 支出類別: 租金, 辦公用品...
+- expense_amount (decimal(12,2), default 0) = 支出金額
+- petty_cash (decimal(12,2), default 0) = 放入零用金的金額
+- handler (varchar(100)) = 經手人
+- reimbursement_status (varchar(50)) = 報銷狀態
+- notes (text) = 備註
+- deduct_from_petty_cash (boolean) = 是否從零用金扣除
+- is_deleted (boolean, default false) = 是否已刪除
+- created_by (text) = 建立者
+- updated_by (text) = 更新者
+- created_at (timestamptz, default now()) = 建立時間
+- updated_at (timestamptz, default now()) = 更新時間
+
+**數據統計 (2026-01-26)**:
+| 年份 | 記錄數 |
+|------|--------|
+| 2024年 | 410 筆 |
+| 2025年 | 1,316 筆 |
+| 2026年 | 59 筆 |
+
+**2026年付款方式分佈**:
+- 現金: 41 筆
+- 銀行轉賬: 18 筆
+
+**索引**:
+- idx_ft_fiscal_year (fiscal_year)
+- idx_ft_billing_month (billing_month)
+- idx_ft_transaction_date (transaction_date)
+- idx_ft_income_category (income_category)
+- idx_ft_expense_category (expense_category)
+- idx_ft_journal_number (journal_number)
+
+### [public.global_journal_sequence] — 流水號序列表 (1條記錄) 🆕
+**用途**: 追蹤財務交易的流水號序列
+- id (integer, PRIMARY KEY, default 1) = 序列 ID (固定為1)
+- last_number (integer, default 0) = 最後使用的序號
+
+**當前狀態**: last_number = 1801 (下一筆交易將為 00001802)
+
+### [public.accounting_handlers] — 經手人選項表 (4條記錄) 🆕
+**用途**: 財務交易經手人的下拉選單來源
+- id (integer, auto-increment) = 系統 ID
+- name (varchar) = 經手人姓名
+- is_active (boolean, default true) = 是否啟用
+- sort_order (integer) = 排序順序
+
+### [public.income_categories] — 收入類別選項表 (4條記錄) 🆕
+**用途**: 收入類別的下拉選單來源
+- id (integer, auto-increment) = 系統 ID
+- name (varchar) = 類別名稱
+- color (varchar) = 顯示顏色
+- is_active (boolean, default true) = 是否啟用
+- sort_order (integer) = 排序順序
+
+### [public.expense_categories] — 支出類別選項表 (22條記錄) 🆕
+**用途**: 支出類別的下拉選單來源
+- id (integer, auto-increment) = 系統 ID
+- name (varchar) = 類別名稱
+- color (varchar) = 顯示顏色
+- is_active (boolean, default true) = 是否啟用
+- sort_order (integer) = 排序順序
+
+### [public.payment_methods] — 付款方式選項表 (5條記錄) 🆕
+**用途**: 付款方式的下拉選單來源
+- id (integer, auto-increment) = 系統 ID
+- name (varchar) = 付款方式名稱
+- is_active (boolean, default true) = 是否啟用
+- sort_order (integer) = 排序順序
+
+### [public.reimbursement_statuses] — 報銷狀態選項表 (3條記錄) 🆕
+**用途**: 報銷狀態的下拉選單來源
+- id (integer, auto-increment) = 系統 ID
+- name (varchar) = 狀態名稱
+- is_active (boolean, default true) = 是否啟用
+- sort_order (integer) = 排序順序
 
 ## 數據項目 - 枚舉類型定義
 
@@ -625,41 +713,70 @@ voucher_application_status_enum = { 已經持有, 申請中 }
 
 **項目二：數據項目 (Data Project)**  
 - 項目網址: https://cvkxlvdicympakfecgvv.supabase.co
-- 表數量: 12個 (客戶、員工、服務、打卡、通知等業務表)
-- 記錄數量: 4,619+ 條跨所有表
+- 表數量: 18個 (客戶、員工、服務、打卡、通知、財務會計等業務表)
+- 記錄數量: 6,474+ 條跨所有表
 - 狀態: ✅ 完全運行，RLS 已配置
 - 用途: 主要業務數據管理
 
 **整體系統**
 - 項目總數: 2個
-- 表總數: 12個 (認證項目已簡化，主要業務表在數據項目)  
+- 表總數: 18個 (認證項目已簡化，主要業務表在數據項目)  
 - 狀態: ✅ 雙項目架構運行正常，已完成系統簡化
-- 改進: 🟢 冗餘表已清理，通知系統已集成，維護成本降低
-- 最新更新: 員工打卡記錄和通知管理頁面已投入使用
+- 改進: 🟢 冗餘表已清理，通知系統已集成，財務會計系統已上線
+- 最新更新: 財務會計系統（流水帳/零用金）已投入使用
 
 ========================================================================
-最新系統更新 (2026-01-15)
+最新系統更新 (2026-01-26)
 ========================================================================
 
 ## 數據統計更新
 
-根據 2026-01-15 的檢查結果，與上次記錄 (2025-11-17) 對比:
+根據 2026-01-26 的檢查結果:
 
-| 表名 | 上次記錄 | 當前記錄 | 變化 |
-|------|----------|----------|------|
+| 表名 | 2026-01-15 | 2026-01-26 | 變化 |
+|------|------------|------------|------|
 | auth_user_bridge | 31 | 31 | 無變化 |
-| billing_salary_data | 3,161 | 4,151 | +990 (+31.3%) |
-| care_staff_profiles | 212 | 244 | +32 (+15.1%) |
-| clock_records | 0 | 1 | +1 (首次使用) |
-| commission_rate_introducer | 5 | 5 | 無變化 |
-| customer_personal_data | 136 | 155 | +19 (+14.0%) |
+| billing_salary_data | 4,151 | 4,169 | +18 (+0.4%) |
+| care_staff_profiles | 244 | 250 | +6 (+2.5%) |
+| clock_records | 1 | 1 | 無變化 |
+| commission_rate_introducer | 5 | 6 | +1 |
+| customer_personal_data | 155 | 156 | +1 |
 | service_signatures | 0 | 0 | 無變化 |
 | signature_files | 0 | 0 | 無變化 |
 | voucher_rate | 7 | 7 | 無變化 |
 | job_position_options | 17 | 17 | 無變化 |
 | language_options | 8 | 8 | 無變化 |
 | notifications | 0 | 0 | 無變化 |
-| **總計** | **3,577** | **4,619** | **+1,042 (+29.1%)** |
+| **financial_transactions** 🆕 | - | 1,785 | 新增表 |
+| **global_journal_sequence** 🆕 | - | 1 | 新增表 |
+| **accounting_handlers** 🆕 | - | 4 | 新增表 |
+| **income_categories** 🆕 | - | 4 | 新增表 |
+| **expense_categories** 🆕 | - | 22 | 新增表 |
+| **payment_methods** 🆕 | - | 5 | 新增表 |
+| **reimbursement_statuses** 🆕 | - | 3 | 新增表 |
+| **總計** | **4,619** | **6,474** | **+1,855 (+40.2%)** |
+
+## 新增功能：財務會計系統 🆕
+
+### 財務會計管理頁面
+- **路徑**: `/accounting`
+- **功能**:
+  - 流水帳視圖：銀行轉賬交易 + 不從零用金扣除的現金支出
+  - 零用金視圖：現金交易（從零用金扣除）
+  - 支援按年份、月份、關鍵字篩選
+  - 搜尋支援交易項目、編號、收入/支出類別
+  - 交易編輯、刪除功能
+  - 審計日誌追蹤
+  - 收支統計摘要
+- **數據來源**: `financial_transactions` 表
+- **狀態**: ✅ 已完成，正在使用中
+
+### 財務數據統計 (2026-01-26)
+- **總記錄**: 1,785 筆
+- **2024年**: 410 筆
+- **2025年**: 1,316 筆
+- **2026年**: 59 筆
+- **流水號序列**: 當前 1801，下一筆為 00001802 |
 
 ## 服務類型統計 (來自實際數據)
 
