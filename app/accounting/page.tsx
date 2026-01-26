@@ -21,6 +21,7 @@ interface FinancialTransaction {
   handler: string | null
   reimbursement_status: string | null
   notes: string | null
+  deduct_from_petty_cash: boolean | null  // 是否從零用金扣除
 }
 
 type ViewMode = 'ledger' | 'petty_cash'
@@ -33,6 +34,7 @@ export default function AccountingPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('ledger')
+  const [showExcludedModal, setShowExcludedModal] = useState(false)
 
   // 可用年份列表
   const availableYears = [...new Set(transactions.map(t => t.fiscal_year))].sort((a, b) => b - a)
@@ -78,9 +80,12 @@ export default function AccountingPage() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
   }
 
-  // 篩選流水帳交易：只有銀行轉賬
+  // 篩選流水帳交易：銀行轉賬 + 不從零用金扣除的現金支出
   const getLedgerTransactions = () => {
-    let filtered = transactions.filter(t => t.payment_method === '銀行轉賬')
+    let filtered = transactions.filter(t => 
+      t.payment_method === '銀行轉賬' ||
+      (t.payment_method === '現金' && t.expense_amount > 0 && t.deduct_from_petty_cash === false)
+    )
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
@@ -99,9 +104,12 @@ export default function AccountingPage() {
     return filtered
   }
 
-  // 篩選零用金交易：所有現金交易（收入=補充，支出=使用）
+  // 篩選零用金交易：現金交易且 deduct_from_petty_cash = true
   const getPettyCashTransactions = () => {
-    let filtered = transactions.filter(t => t.payment_method === '現金')
+    let filtered = transactions.filter(t => 
+      t.payment_method === '現金' && 
+      (t.deduct_from_petty_cash === true || t.income_amount > 0)  // 支出需要檢查，收入(補充)全部顯示
+    )
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
@@ -162,6 +170,32 @@ export default function AccountingPage() {
     const totalIn = data.reduce((sum, t) => sum + (t.income_amount || 0), 0)  // 補充
     const totalOut = data.reduce((sum, t) => sum + (t.expense_amount || 0), 0) // 支出
     return { totalIn, totalOut, balance: totalIn - totalOut, count: data.length }
+  }
+
+  // 獲取已排除的現金支出（不在零用金顯示）
+  const getExcludedCashExpenses = () => {
+    return transactions.filter(t => 
+      t.payment_method === '現金' && 
+      t.expense_amount > 0 && 
+      t.deduct_from_petty_cash === false
+    )
+  }
+
+  // 切換是否從零用金扣除
+  const toggleDeductFromPettyCash = async (id: string, currentValue: boolean) => {
+    const { error } = await supabase
+      .from('financial_transactions')
+      .update({ deduct_from_petty_cash: !currentValue })
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error updating:', error)
+      alert('更新失敗')
+      return
+    }
+
+    // 重新載入數據
+    fetchTransactions()
   }
 
   if (loading) {
@@ -342,7 +376,7 @@ export default function AccountingPage() {
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
                   <span>🏦</span> 流水帳 - {selectedMonth !== 'all' ? formatMonth(selectedMonth) : `${selectedYear}年全年`}
                 </h3>
-                <p className="text-xs text-text-tertiary mt-1">銀行轉賬記錄</p>
+                <p className="text-xs text-text-tertiary mt-1">銀行轉賬及非零用金現金支出</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -355,6 +389,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">收入</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-32">餘額</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-20">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -363,6 +398,7 @@ export default function AccountingPage() {
                       const data = getLedgerTransactions()
                       return data.map((txn, index) => {
                         runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
+                        const isCashExpenseFromLedger = txn.payment_method === '現金' && txn.expense_amount > 0 && txn.deduct_from_petty_cash === false
                         return (
                           <tr key={txn.id} className="hover:bg-bg-secondary/50">
                             <td className="px-3 py-2 text-text-tertiary font-mono text-xs">
@@ -372,8 +408,11 @@ export default function AccountingPage() {
                               {formatDate(txn.transaction_date)}
                             </td>
                             <td className="px-3 py-2 text-text-primary">
-                              <div className="truncate max-w-[300px]" title={txn.transaction_item}>
+                              <div className="truncate max-w-[250px]" title={txn.transaction_item}>
                                 {txn.transaction_item}
+                                {isCashExpenseFromLedger && (
+                                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">現金</span>
+                                )}
                               </div>
                             </td>
                             <td className="px-3 py-2 text-text-secondary text-xs">
@@ -388,6 +427,20 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
+                            <td className="px-3 py-2 text-center">
+                              {/* 只有現金支出(非零用金)才能移回 */}
+                              {isCashExpenseFromLedger ? (
+                                <button
+                                  onClick={() => toggleDeductFromPettyCash(txn.id, false)}
+                                  className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                                  title="移回零用金"
+                                >
+                                  移回零用金
+                                </button>
+                              ) : (
+                                <span className="text-text-quaternary text-xs">-</span>
+                              )}
+                            </td>
                           </tr>
                         )
                       })
@@ -401,6 +454,7 @@ export default function AccountingPage() {
                       <td className={`px-3 py-3 text-right font-bold ${ledgerStats.net >= 0 ? 'text-success' : 'text-error'}`}>
                         {formatCurrency(ledgerStats.net)}
                       </td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -436,6 +490,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">補充</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-20">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -469,6 +524,20 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
+                            <td className="px-3 py-2 text-center">
+                              {/* 只有現金支出才能移至流水帳 */}
+                              {txn.expense_amount > 0 ? (
+                                <button
+                                  onClick={() => toggleDeductFromPettyCash(txn.id, true)}
+                                  className="text-xs px-2 py-1 rounded bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
+                                  title="移至流水帳"
+                                >
+                                  移至流水帳
+                                </button>
+                              ) : (
+                                <span className="text-text-quaternary text-xs">-</span>
+                              )}
+                            </td>
                           </tr>
                         )
                       })
@@ -482,6 +551,7 @@ export default function AccountingPage() {
                       <td className={`px-3 py-3 text-right font-bold ${pettyCashStats.balance >= 0 ? 'text-success' : 'text-error'}`}>
                         {formatCurrency(pettyCashStats.balance)}
                       </td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
