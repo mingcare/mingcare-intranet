@@ -181,8 +181,17 @@ export default function AccountingPage() {
     )
   }
 
-  // 切換是否從零用金扣除
-  const toggleDeductFromPettyCash = async (id: string, currentValue: boolean) => {
+  // 切換是否從零用金扣除（帶確認訊息）
+  const toggleDeductFromPettyCash = async (id: string, currentValue: boolean, transactionItem: string) => {
+    const action = currentValue ? '移至流水帳' : '移回零用金'
+    const message = currentValue 
+      ? `確定要將「${transactionItem}」移至流水帳嗎？\n\n此項目將不再從零用金扣除。`
+      : `確定要將「${transactionItem}」移回零用金嗎？\n\n此項目將從零用金中扣除。`
+    
+    if (!confirm(message)) {
+      return
+    }
+
     const { error } = await supabase
       .from('financial_transactions')
       .update({ deduct_from_petty_cash: !currentValue })
@@ -431,7 +440,7 @@ export default function AccountingPage() {
                               {/* 只有現金支出(非零用金)才能移回 */}
                               {isCashExpenseFromLedger ? (
                                 <button
-                                  onClick={() => toggleDeductFromPettyCash(txn.id, false)}
+                                  onClick={() => toggleDeductFromPettyCash(txn.id, false, txn.transaction_item)}
                                   className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                                   title="移回零用金"
                                 >
@@ -528,7 +537,7 @@ export default function AccountingPage() {
                               {/* 只有現金支出才能移至流水帳 */}
                               {txn.expense_amount > 0 ? (
                                 <button
-                                  onClick={() => toggleDeductFromPettyCash(txn.id, true)}
+                                  onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
                                   className="text-xs px-2 py-1 rounded bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
                                   title="移至流水帳"
                                 >
