@@ -140,6 +140,7 @@ export interface CareStaffFormData {
   gender?: Gender
   nationality?: string
   preferred_area?: PreferredArea
+  address?: string
 
   // 聯絡資料
   emergency_contact?: string

@@ -526,6 +526,7 @@ export default function CareStaffPage() {
         dob: (formData.get('dob') as string) || undefined,
         gender: (formData.get('gender') as string) as Gender || undefined,
         preferred_area: (formData.get('preferred_area') as string) as PreferredArea || undefined,
+        address: (formData.get('address') as string)?.trim() || undefined,
         emergency_contact: (formData.get('emergency_contact') as string)?.trim() || undefined,
         emergency_contact_phone: (formData.get('emergency_contact_phone') as string)?.trim() || undefined,
       }
@@ -1411,6 +1412,19 @@ export default function CareStaffPage() {
                         </select>
                         <p className="text-xs text-text-tertiary mt-1">
                           {editingStaff.preferred_area ? '' : '沒有提供'}
+                        </p>
+                      </div>
+                      <div className="form-group-apple md:col-span-2">
+                        <label className="form-label-apple">住址</label>
+                        <input
+                          type="text"
+                          name="address"
+                          defaultValue={editingStaff.address || ''}
+                          className="form-input-apple"
+                          placeholder="請輸入住址"
+                        />
+                        <p className="text-xs text-text-tertiary mt-1">
+                          {editingStaff.address ? '' : '沒有提供'}
                         </p>
                       </div>
                       <div className="form-group-apple">
