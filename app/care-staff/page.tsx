@@ -434,6 +434,7 @@ export default function CareStaffPage() {
 
         // 初始化文件 URLs
         setFileUrls({
+          profile_photo_url: result.data.profile_photo_url || '',
           hkid_copy_url: result.data.hkid_copy_url || '',
           certificate_1: result.data.certificate_1 || '',
           certificate_2: result.data.certificate_2 || '',
@@ -1693,6 +1694,24 @@ export default function CareStaffPage() {
                           {editingStaff.language && editingStaff.language.length > 0 ? '' : '沒有提供'}
                         </p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* 個人照片 */}
+                  <div className="mb-8">
+                    <h3 className="text-lg font-medium text-text-primary mb-4 border-b border-border-light pb-2">
+                      個人照片
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FileUploadCard
+                        label="個人照片"
+                        fieldName="profile_photo_url"
+                        staffId={editingStaff.staff_id || ''}
+                        currentUrl={fileUrls.profile_photo_url}
+                        onUploadSuccess={(url: string) => handleFileUploadSuccess('profile_photo_url', url)}
+                        onRemove={() => handleFileRemove('profile_photo_url')}
+                        disabled={fileUploadDisabled}
+                      />
                     </div>
                   </div>
 

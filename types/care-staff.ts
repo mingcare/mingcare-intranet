@@ -48,6 +48,7 @@ export interface CareStaff {
   dob?: string | null // 出生日期（date）
   gender?: Gender | null
   nationality?: string | null
+  address?: string | null // 住址
   preferred_area?: PreferredArea | null
 
   // 聯絡資料
@@ -71,6 +72,7 @@ export interface CareStaff {
   main_duties?: string | null
 
   // 文件連結
+  profile_photo_url?: string | null // 個人照片
   hkid_copy_url?: string | null
   certificate_1?: string | null
   certificate_2?: string | null
@@ -178,7 +180,7 @@ export interface CareStaffFormErrors {
 // ========================================================================
 
 export interface CareStaffFileUpload {
-  field_name: 'hkid_copy_url' | 'certificate_1' | 'certificate_2' | 'certificate_3' | 'certificate_4' | 'certificate_5' | 'scrc_status'
+  field_name: 'profile_photo_url' | 'hkid_copy_url' | 'certificate_1' | 'certificate_2' | 'certificate_3' | 'certificate_4' | 'certificate_5' | 'scrc_status'
   file: File
   preview_url?: string
 }

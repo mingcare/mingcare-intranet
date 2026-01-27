@@ -76,6 +76,7 @@ export interface CareStaffProfile {
   dob?: string;
   gender?: Gender;
   nationality?: string;
+  address?: string;
   preferred_area?: PreferredArea;
   emergency_contact?: string;
   emergency_contact_phone?: string;
@@ -89,6 +90,7 @@ export interface CareStaffProfile {
   company_position?: string;
   employment_period?: string;
   main_duties?: string;
+  profile_photo_url?: string;
   hkid_copy_url?: string;
   certificate_1?: string;
   certificate_2?: string;
