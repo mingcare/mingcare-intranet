@@ -64,6 +64,7 @@ export default function AccountingPage() {
   // 編輯相關狀態
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)  // 標記是新增還是編輯
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<FinancialTransaction | null>(null)
   const [currentUser, setCurrentUser] = useState<string>('')
@@ -479,7 +480,129 @@ export default function AccountingPage() {
   // 開啟編輯 Modal
   const openEditModal = (txn: FinancialTransaction) => {
     setEditingTransaction({ ...txn })
+    setIsCreating(false)
     setShowEditModal(true)
+  }
+
+  // 獲取下一個流水號
+  const getNextJournalNumber = async () => {
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .select('journal_number')
+      .order('journal_number', { ascending: false })
+      .limit(1)
+
+    if (error || !data || data.length === 0) {
+      return '00000001'
+    }
+
+    const lastNumber = parseInt(data[0].journal_number, 10)
+    const nextNumber = lastNumber + 1
+    return nextNumber.toString().padStart(8, '0')
+  }
+
+  // 開啟新增 Modal
+  const openCreateModal = async () => {
+    const nextJournalNumber = await getNextJournalNumber()
+    const today = new Date().toISOString().split('T')[0]
+    
+    setEditingTransaction({
+      id: '',
+      journal_number: nextJournalNumber,
+      transaction_code: '',
+      fiscal_year: new Date().getFullYear(),
+      billing_month: '',
+      transaction_date: today,
+      transaction_item: '',
+      payment_method: '',
+      income_category: null,
+      income_amount: 0,
+      expense_category: null,
+      expense_amount: 0,
+      handler: null,
+      reimbursement_status: null,
+      notes: null,
+      deduct_from_petty_cash: true
+    })
+    setIsCreating(true)
+    setShowEditModal(true)
+  }
+
+  // 新增交易
+  const createTransaction = async () => {
+    if (!editingTransaction) return
+    
+    if (!editingTransaction.transaction_item.trim()) {
+      alert('請輸入交易項目')
+      return
+    }
+    if (!editingTransaction.transaction_date) {
+      alert('請選擇交易日期')
+      return
+    }
+    if (!editingTransaction.payment_method) {
+      alert('請選擇付款方式')
+      return
+    }
+    if (editingTransaction.income_amount === 0 && editingTransaction.expense_amount === 0) {
+      alert('請輸入收入或支出金額')
+      return
+    }
+    
+    setSaving(true)
+    
+    // 產生 billing_month
+    const txnDate = new Date(editingTransaction.transaction_date)
+    const billingMonth = `${txnDate.getFullYear()}年${txnDate.getMonth() + 1}月`
+    
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .insert({
+        journal_number: editingTransaction.journal_number,
+        transaction_code: '',
+        fiscal_year: txnDate.getFullYear(),
+        billing_month: billingMonth,
+        transaction_date: editingTransaction.transaction_date,
+        transaction_item: editingTransaction.transaction_item,
+        payment_method: editingTransaction.payment_method,
+        income_category: editingTransaction.income_category,
+        income_amount: editingTransaction.income_amount || 0,
+        expense_category: editingTransaction.expense_category,
+        expense_amount: editingTransaction.expense_amount || 0,
+        handler: editingTransaction.handler,
+        reimbursement_status: editingTransaction.reimbursement_status,
+        notes: editingTransaction.notes,
+        deduct_from_petty_cash: editingTransaction.payment_method === '現金' ? editingTransaction.deduct_from_petty_cash : null,
+        created_by: currentUser,
+        is_deleted: false
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating:', error)
+      alert('新增失敗: ' + error.message)
+      setSaving(false)
+      return
+    }
+
+    // 記錄審計日誌
+    await supabase.from('financial_audit_log').insert({
+      transaction_id: data.id,
+      journal_number: editingTransaction.journal_number,
+      action_type: 'create',
+      changed_fields: ['all'],
+      old_values: {},
+      new_values: data,
+      performed_by: currentUser
+    })
+
+    setShowEditModal(false)
+    setIsCreating(false)
+    setSaving(false)
+    fetchTransactions()
+    fetchPettyCashHistoricalBalance()
+    alert('新增成功！')
   }
 
   // 儲存編輯
@@ -692,6 +815,15 @@ export default function AccountingPage() {
                 <p className="text-sm text-text-secondary">流水帳及零用金管理</p>
               </div>
             </div>
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors shadow-sm"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="font-medium">新增帳目</span>
+            </button>
           </div>
         </div>
       </header>
@@ -1107,12 +1239,12 @@ export default function AccountingPage() {
         )}
       </main>
 
-      {/* 編輯交易 Modal */}
+      {/* 編輯/新增交易 Modal */}
       {showEditModal && editingTransaction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-bg-primary rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-bg-primary px-6 py-4 border-b border-border-light flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">編輯交易</h2>
+              <h2 className="text-lg font-semibold text-text-primary">{isCreating ? '新增帳目' : '編輯交易'}</h2>
               <button
                 onClick={() => setShowEditModal(false)}
                 className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
@@ -1278,17 +1410,17 @@ export default function AccountingPage() {
             </div>
             <div className="sticky bottom-0 bg-bg-primary px-6 py-4 border-t border-border-light flex justify-end gap-3">
               <button
-                onClick={() => setShowEditModal(false)}
+                onClick={() => { setShowEditModal(false); setIsCreating(false); }}
                 className="px-4 py-2 rounded-lg border border-border-light text-text-secondary hover:bg-bg-secondary transition-colors"
               >
                 取消
               </button>
               <button
-                onClick={saveTransaction}
+                onClick={isCreating ? createTransaction : saveTransaction}
                 disabled={saving}
                 className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
               >
-                {saving ? '儲存中...' : '儲存變更'}
+                {saving ? '處理中...' : isCreating ? '新增' : '儲存變更'}
               </button>
             </div>
           </div>
