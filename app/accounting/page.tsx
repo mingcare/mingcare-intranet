@@ -186,7 +186,9 @@ export default function AccountingPage() {
     // 篩選零用金相關交易
     const pettyCashTxns = allData.filter(t => 
       (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
-      t.expense_category === 'Petty Cash'
+      t.expense_category === 'Petty Cash' ||
+      t.income_category === '期初調整' ||
+      t.expense_category === '期初調整'
     )
 
     // 按月份計算累計餘額
@@ -196,12 +198,13 @@ export default function AccountingPage() {
     pettyCashTxns.forEach(t => {
       const txnMonth = t.transaction_date.substring(0, 7) // YYYY-MM
       const isReplenishment = t.expense_category === 'Petty Cash'
-      const isAdjustment = t.income_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
+      const isAdjustment = t.income_category === '期初調整' || t.expense_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
       
       if (isReplenishment) {
         runningBalance += (t.expense_amount || 0)
       } else if (isAdjustment) {
-        runningBalance += (t.income_amount || 0)
+        // 調整記錄：收入增加餘額，支出減少餘額
+        runningBalance += (t.income_amount || 0) - (t.expense_amount || 0)
       } else {
         runningBalance += (t.income_amount || 0) - (t.expense_amount || 0)
       }
@@ -364,7 +367,7 @@ export default function AccountingPage() {
 
   // 判斷是否為系統調整交易（不在表格中顯示，但計入餘額）
   const isSystemAdjustment = (t: FinancialTransaction) => {
-    return t.income_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
+    return t.income_category === '期初調整' || t.expense_category === '期初調整' || t.transaction_code?.startsWith('ADJ-')
   }
 
   // 篩選零用金交易：
