@@ -6949,32 +6949,6 @@ function ScheduleFormModal({
                     )}
                   </div>
 
-                  {/* 護理人員薪資歷史記錄提示 */}
-                  {formData.staff_id && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">📋</span>
-                        <span className="text-sm font-medium text-blue-800">
-                          最近 5 次記錄 ({formData.staff_id} {formData.care_staff_name})
-                        </span>
-                      </div>
-                      {staffSalaryHistoryLoading ? (
-                        <div className="text-sm text-blue-600 animate-pulse">載入中...</div>
-                      ) : staffSalaryHistory.length > 0 ? (
-                        <div className="space-y-1">
-                          {staffSalaryHistory.map((record, index) => (
-                            <div key={index} className="text-sm text-blue-700 font-mono bg-white/50 px-2 py-1 rounded">
-                              <span className="inline-block w-4 text-blue-500">{'①②③④⑤'[index]}</span>
-                              {' '}{record.service_date} | {record.customer_name || '未知客戶'} | 薪資: ${record.staff_salary?.toLocaleString() || 0} | 時薪: ${record.hourly_salary?.toLocaleString() || 0}/小時
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-blue-600">暫無歷史記錄</div>
-                      )}
-                    </div>
-                  )}
-
                   {/* 護理人員編號（自動帶入） */}
                   <div>
                     <label className="block text-apple-caption font-medium text-text-primary mb-2">
@@ -7058,6 +7032,31 @@ function ScheduleFormModal({
                 <h4 className="text-apple-heading text-text-primary mb-4">收費與工資</h4>
 
                 <div className="space-y-4">
+                  {/* 護理人員薪資歷史記錄提示 */}
+                  {formData.staff_id && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg">📋</span>
+                        <span className="text-sm font-medium text-blue-800">
+                          最近 5 次記錄 ({formData.staff_id} {formData.care_staff_name})
+                        </span>
+                      </div>
+                      {staffSalaryHistoryLoading ? (
+                        <div className="text-sm text-blue-600 animate-pulse">載入中...</div>
+                      ) : staffSalaryHistory.length > 0 ? (
+                        <div className="space-y-1">
+                          {staffSalaryHistory.map((record, index) => (
+                            <div key={index} className="text-sm text-blue-700 font-mono bg-white/50 px-2 py-1 rounded">
+                              <span className="inline-block w-4 text-blue-500">{'①②③④⑤'[index]}</span>
+                              {' '}{record.service_date} | {record.customer_name || '未知客戶'} | 薪資: ${record.staff_salary?.toLocaleString() || 0} | 時薪: ${record.hourly_salary?.toLocaleString() || 0}/小時
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-blue-600">暫無歷史記錄</div>
+                      )}
+                    </div>
+                  )}
                   {/* 第一行：服務費用 + 員工薪資 */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* 服務費用 */}
