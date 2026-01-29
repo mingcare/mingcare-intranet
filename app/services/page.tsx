@@ -1900,6 +1900,36 @@ function ScheduleTab({
   // 月曆客戶篩選狀態
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string>('all') // 'all' 或客戶名稱
 
+  // 全域已選客戶狀態 - 在外面選擇後，新增排班時自動填入
+  const [globalSelectedCustomer, setGlobalSelectedCustomer] = useState<{
+    customer_id: string
+    customer_name: string
+    phone: string
+    service_address: string
+    project_category?: string
+  } | null>(null)
+
+  // 頂部選擇客戶彈窗狀態
+  const [showGlobalCustomerPicker, setShowGlobalCustomerPicker] = useState(false)
+  const [globalPickerMonth, setGlobalPickerMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [globalPickerCategory, setGlobalPickerCategory] = useState<string>('')
+  const [globalPickerProjectCategory, setGlobalPickerProjectCategory] = useState<string>('')
+  const [globalPickerShowAll, setGlobalPickerShowAll] = useState(false)
+  const [globalPickerCustomerList, setGlobalPickerCustomerList] = useState<{
+    customer_id: string
+    customer_name: string
+    phone: string
+    service_address: string
+    customer_type: string
+    project_category: string
+    hasLastMonthService: boolean
+    hasCurrentMonthSchedule: boolean
+  }[]>([])
+  const [globalPickerLoading, setGlobalPickerLoading] = useState(false)
+
   // 社區券統計更新觸發器
   const [voucherUpdateTrigger, setVoucherUpdateTrigger] = useState(0)
 
@@ -1988,6 +2018,112 @@ function ScheduleTab({
       totalFee
     }
   }
+
+  // 載入全域客戶選擇器的客戶列表
+  const loadGlobalPickerCustomers = async () => {
+    setGlobalPickerLoading(true)
+    try {
+      // 解析月份
+      const [year, month] = globalPickerMonth.split('-').map(Number)
+      const currentMonthStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const currentMonthEnd = `${year}-${String(month).padStart(2, '0')}-31`
+      
+      // 上月
+      const lastMonth = month === 1 ? 12 : month - 1
+      const lastMonthYear = month === 1 ? year - 1 : year
+      const lastMonthStart = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`
+      const lastMonthEnd = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-31`
+
+      // 查詢客戶資料
+      const { data: customers, error: customerError } = await supabase
+        .from('customer_personal_data')
+        .select('customer_id, customer_name, phone, service_address, customer_type')
+
+      if (customerError) {
+        console.error('查詢客戶失敗:', customerError)
+        setGlobalPickerCustomerList([])
+        return
+      }
+
+      // 查詢上月有服務的客戶
+      const { data: lastMonthRecords } = await supabase
+        .from('billing_salary_data')
+        .select('customer_id, customer_name, project_category')
+        .gte('service_date', lastMonthStart)
+        .lte('service_date', lastMonthEnd)
+
+      // 建立上月服務客戶集合及其 project_category
+      const lastMonthCustomers = new Map<string, string>()
+      ;(lastMonthRecords || []).forEach(record => {
+        const key = record.customer_id || record.customer_name
+        if (key && !lastMonthCustomers.has(key)) {
+          lastMonthCustomers.set(key, record.project_category || '')
+        }
+      })
+
+      // 查詢本月已安排的排程
+      const { data: currentMonthRecords } = await supabase
+        .from('billing_salary_data')
+        .select('customer_id, customer_name')
+        .gte('service_date', currentMonthStart)
+        .lte('service_date', currentMonthEnd)
+
+      const currentMonthCustomers = new Set<string>()
+      ;(currentMonthRecords || []).forEach(record => {
+        currentMonthCustomers.add(record.customer_id || record.customer_name)
+      })
+
+      // 組合客戶列表
+      let customerList = (customers || []).map(customer => {
+        const key = customer.customer_id || customer.customer_name
+        const hasLastMonthService = lastMonthCustomers.has(key)
+        const projectCategory = lastMonthCustomers.get(key) || ''
+        return {
+          customer_id: customer.customer_id || '',
+          customer_name: customer.customer_name || '',
+          phone: customer.phone || '',
+          service_address: customer.service_address || '',
+          customer_type: customer.customer_type || '',
+          project_category: projectCategory,
+          hasLastMonthService,
+          hasCurrentMonthSchedule: currentMonthCustomers.has(key)
+        }
+      })
+
+      // 篩選條件
+      if (globalPickerCategory) {
+        customerList = customerList.filter(c => c.customer_type === globalPickerCategory)
+      }
+      if (globalPickerProjectCategory) {
+        customerList = customerList.filter(c => c.project_category === globalPickerProjectCategory)
+      }
+      if (!globalPickerShowAll) {
+        customerList = customerList.filter(c => c.hasLastMonthService)
+      }
+
+      // 排序：上月有服務的排前面
+      customerList.sort((a, b) => {
+        if (a.hasLastMonthService !== b.hasLastMonthService) {
+          return a.hasLastMonthService ? -1 : 1
+        }
+        return a.customer_name.localeCompare(b.customer_name, 'zh-Hant')
+      })
+
+      setGlobalPickerCustomerList(customerList)
+    } catch (error) {
+      console.error('載入客戶列表失敗:', error)
+      setGlobalPickerCustomerList([])
+    } finally {
+      setGlobalPickerLoading(false)
+    }
+  }
+
+  // 當全域客戶選擇器打開或篩選條件改變時載入客戶列表
+  useEffect(() => {
+    if (showGlobalCustomerPicker) {
+      loadGlobalPickerCustomers()
+    }
+  }, [showGlobalCustomerPicker, globalPickerMonth, globalPickerCategory, globalPickerProjectCategory, globalPickerShowAll])
 
   // 確認儲存本地排程到Supabase（只儲存篩選後的）
   const handleSaveLocalSchedules = async () => {
@@ -2301,6 +2437,37 @@ function ScheduleTab({
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-4">
+              {/* 選擇客戶按鈕 - 放在最左邊 */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowGlobalCustomerPicker(true)}
+                  className={`px-4 py-2 rounded-xl border transition-all duration-300 flex items-center gap-2 ${
+                    globalSelectedCustomer
+                      ? 'bg-green-50 border-green-300 text-green-700'
+                      : 'border-border-light hover:bg-bg-secondary text-text-secondary'
+                  }`}
+                >
+                  <span>📋</span>
+                  <span className="max-w-[120px] truncate">
+                    {globalSelectedCustomer ? globalSelectedCustomer.customer_name : '選擇客戶'}
+                  </span>
+                  {globalSelectedCustomer && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setGlobalSelectedCustomer(null)
+                      }}
+                      className="ml-1 p-0.5 hover:bg-green-200 rounded-full transition-colors"
+                      title="清除已選客戶"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </button>
+              </div>
+
               <h3 className="text-apple-heading text-text-primary">月曆排班</h3>
 
               {/* 客戶篩選器 */}
@@ -2624,6 +2791,7 @@ function ScheduleTab({
             project_category: editingLocalSchedule.schedule.project_category as any,
             project_manager: editingLocalSchedule.schedule.project_manager as any
           } : null}
+          preselectedCustomer={editingLocalSchedule ? null : globalSelectedCustomer}
           onSubmit={handleSubmitSchedule}
         />
       )}
@@ -2643,6 +2811,159 @@ function ScheduleTab({
           onDelete={handleDeleteLocalScheduleFromModal}
           onEdit={handleEditLocalSchedule}
         />
+      )}
+
+      {/* 全域客戶選擇器彈窗 */}
+      {showGlobalCustomerPicker && (
+        <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center" onClick={() => setShowGlobalCustomerPicker(false)}>
+          <div className="bg-white rounded-xl w-[90%] max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl z-[10002]" onClick={e => e.stopPropagation()}>
+            {/* 彈窗標題 */}
+            <div className="p-4 border-b border-border-light bg-bg-secondary">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-text-primary">📋 選擇客戶（排班前置）</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowGlobalCustomerPicker(false)}
+                  className="p-1 hover:bg-bg-tertiary rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* 已選客戶提示 */}
+              {globalSelectedCustomer && (
+                <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                  <span className="text-green-700 text-sm">
+                    ✅ 已選: <strong>{globalSelectedCustomer.customer_name}</strong>
+                  </span>
+                  <button
+                    onClick={() => setGlobalSelectedCustomer(null)}
+                    className="text-green-600 hover:text-green-800 text-sm"
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+
+              {/* 篩選條件 */}
+              <div className="flex flex-wrap gap-2">
+                {/* 月份選擇 */}
+                <input
+                  type="month"
+                  value={globalPickerMonth}
+                  onChange={e => setGlobalPickerMonth(e.target.value)}
+                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                />
+
+                {/* 客戶類型 */}
+                <select
+                  value={globalPickerCategory}
+                  onChange={e => setGlobalPickerCategory(e.target.value)}
+                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                >
+                  <option value="">全部類型</option>
+                  {CUSTOMER_TYPE_OPTIONS.filter(opt => opt !== '家訪客戶').map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+
+                {/* 所屬項目 */}
+                <select
+                  value={globalPickerProjectCategory}
+                  onChange={e => setGlobalPickerProjectCategory(e.target.value)}
+                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                >
+                  <option value="">全部項目</option>
+                  {PROJECT_CATEGORY_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+
+                {/* 顯示全部/只顯示上月有服務 */}
+                <button
+                  type="button"
+                  onClick={() => setGlobalPickerShowAll(!globalPickerShowAll)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    globalPickerShowAll
+                      ? 'bg-gray-200 text-gray-700'
+                      : 'bg-blue-500 text-white'
+                  }`}
+                >
+                  {globalPickerShowAll ? '顯示全部' : '只顯示上月有服務'}
+                </button>
+              </div>
+            </div>
+
+            {/* 客戶列表 */}
+            <div className="overflow-y-auto max-h-[50vh]">
+              {globalPickerLoading ? (
+                <div className="p-8 text-center text-text-secondary">
+                  <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                  載入中...
+                </div>
+              ) : globalPickerCustomerList.length === 0 ? (
+                <div className="p-8 text-center text-text-secondary">
+                  沒有符合條件的客戶
+                </div>
+              ) : (
+                <div className="divide-y divide-border-light">
+                  {globalPickerCustomerList.map((customer, index) => (
+                    <div
+                      key={customer.customer_id || index}
+                      onClick={() => {
+                        setGlobalSelectedCustomer({
+                          customer_id: customer.customer_id,
+                          customer_name: customer.customer_name,
+                          phone: customer.phone,
+                          service_address: customer.service_address,
+                          project_category: customer.project_category
+                        })
+                        setShowGlobalCustomerPicker(false)
+                      }}
+                      className={`p-3 hover:bg-bg-secondary cursor-pointer transition-colors ${
+                        globalSelectedCustomer?.customer_id === customer.customer_id ? 'bg-green-50' : ''
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-text-primary">{customer.customer_name}</span>
+                            {customer.hasLastMonthService && (
+                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">上月有服務</span>
+                            )}
+                            {customer.hasCurrentMonthSchedule && (
+                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">本月已排</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-text-secondary mt-1">
+                            {customer.customer_id && <span className="mr-2">{customer.customer_id}</span>}
+                            {customer.phone && <span className="mr-2">📞 {customer.phone}</span>}
+                          </div>
+                          <div className="text-xs text-text-tertiary mt-0.5 truncate">
+                            📍 {customer.service_address || '未設定地址'}
+                          </div>
+                        </div>
+                        <div className="text-right text-xs">
+                          <div className="text-text-secondary">{customer.customer_type}</div>
+                          {customer.project_category && (
+                            <div className="text-text-tertiary">{customer.project_category}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 底部說明 */}
+            <div className="p-3 border-t border-border-light bg-bg-secondary text-xs text-text-secondary">
+              💡 選擇客戶後，點擊月曆日期新增排班時會自動填入客戶資料
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -6245,6 +6566,14 @@ interface ScheduleFormModalProps {
   onDelete?: (recordId: string) => Promise<void>
   isMultiDay?: boolean
   existingRecord?: BillingSalaryRecord | null
+  // 預選客戶資料 - 從外部選擇器傳入
+  preselectedCustomer?: {
+    customer_id: string
+    customer_name: string
+    phone: string
+    service_address: string
+    project_category?: string
+  } | null
 }
 
 function ScheduleFormModal({
@@ -6255,7 +6584,8 @@ function ScheduleFormModal({
   onSubmit,
   onDelete,
   isMultiDay = false,
-  existingRecord = null
+  existingRecord = null,
+  preselectedCustomer = null
 }: ScheduleFormModalProps) {
   // 初始化表單數據
   const getInitialFormData = (): BillingSalaryFormData => {
@@ -6279,6 +6609,27 @@ function ScheduleFormModal({
         service_type: existingRecord.service_type,
         project_category: existingRecord.project_category,
         project_manager: existingRecord.project_manager
+      }
+    } else if (preselectedCustomer) {
+      // 新增模式 + 有預選客戶：使用預選客戶資料
+      return {
+        service_date: selectedDate || formatDateSafely(new Date()),
+        customer_id: preselectedCustomer.customer_id,
+        customer_name: preselectedCustomer.customer_name,
+        phone: preselectedCustomer.phone,
+        service_address: preselectedCustomer.service_address,
+        start_time: '09:00',
+        end_time: '17:00',
+        service_hours: 8,
+        staff_id: '',
+        care_staff_name: '',
+        service_fee: 0,
+        staff_salary: 0,
+        hourly_rate: 0,
+        hourly_salary: 0,
+        service_type: '',
+        project_category: preselectedCustomer.project_category || '',
+        project_manager: ''
       }
     } else {
       // 新增模式：使用默認值
@@ -6306,7 +6657,7 @@ function ScheduleFormModal({
 
   const [formData, setFormData] = useState<BillingSalaryFormData>(getInitialFormData)
 
-  // 當existingRecord改變時重新初始化表單
+  // 當existingRecord或preselectedCustomer改變時重新初始化表單
   useEffect(() => {
     setFormData(getInitialFormData())
     // 同時更新搜索項
@@ -6318,12 +6669,16 @@ function ScheduleFormModal({
       if (existingRecord.staff_id) {
         loadStaffSalaryHistory(existingRecord.staff_id)
       }
+    } else if (preselectedCustomer) {
+      setCustomerSearchTerm(preselectedCustomer.customer_name)
+      setStaffSearchTerm('')
+      setStaffSalaryHistory([])
     } else {
       setCustomerSearchTerm('')
       setStaffSearchTerm('')
       setStaffSalaryHistory([])
     }
-  }, [existingRecord, selectedDate])
+  }, [existingRecord, selectedDate, preselectedCustomer])
 
   // 載入護理人員薪資歷史記錄的函數
   const loadStaffSalaryHistory = async (staffId: string) => {
