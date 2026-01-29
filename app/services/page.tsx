@@ -6260,11 +6260,47 @@ function ScheduleFormModal({
     if (existingRecord) {
       setCustomerSearchTerm(existingRecord.customer_name)
       setStaffSearchTerm(existingRecord.care_staff_name)
+      
+      // 載入護理人員薪資歷史記錄
+      if (existingRecord.staff_id) {
+        loadStaffSalaryHistory(existingRecord.staff_id)
+      }
     } else {
       setCustomerSearchTerm('')
       setStaffSearchTerm('')
+      setStaffSalaryHistory([])
     }
   }, [existingRecord, selectedDate])
+
+  // 載入護理人員薪資歷史記錄的函數
+  const loadStaffSalaryHistory = async (staffId: string) => {
+    if (!staffId) {
+      setStaffSalaryHistory([])
+      return
+    }
+
+    setStaffSalaryHistoryLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('billing_salary_data')
+        .select('service_date, customer_name, staff_salary, hourly_salary')
+        .eq('staff_id', staffId)
+        .order('service_date', { ascending: false })
+        .limit(5)
+
+      if (error) {
+        console.error('查詢護理人員薪資歷史失敗:', error)
+        setStaffSalaryHistory([])
+      } else {
+        setStaffSalaryHistory(data || [])
+      }
+    } catch (error) {
+      console.error('查詢護理人員薪資歷史錯誤:', error)
+      setStaffSalaryHistory([])
+    } finally {
+      setStaffSalaryHistoryLoading(false)
+    }
+  }
 
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -6277,6 +6313,15 @@ function ScheduleFormModal({
   const [staffSearchTerm, setStaffSearchTerm] = useState(existingRecord ? existingRecord.care_staff_name : '')
   const [staffSuggestions, setStaffSuggestions] = useState<any[]>([])
   const [showStaffSuggestions, setShowStaffSuggestions] = useState(false)
+
+  // 護理人員薪資歷史記錄狀態
+  const [staffSalaryHistory, setStaffSalaryHistory] = useState<{
+    service_date: string
+    customer_name: string
+    staff_salary: number
+    hourly_salary: number
+  }[]>([])
+  const [staffSalaryHistoryLoading, setStaffSalaryHistoryLoading] = useState(false)
 
   // 搜尋防抖定時器
   const [customerSearchTimeout, setCustomerSearchTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -6565,11 +6610,14 @@ function ScheduleFormModal({
   }
 
   // 選擇護理人員
-  const selectStaff = (staff: any) => {
+  const selectStaff = async (staff: any) => {
     updateField('care_staff_name', staff.name_chinese)
     updateField('staff_id', staff.staff_id || '')
     setStaffSearchTerm(staff.name_chinese)
     setShowStaffSuggestions(false)
+
+    // 查詢該護理人員最近 5 次的薪資記錄
+    await loadStaffSalaryHistory(staff.staff_id || '')
   }
 
   if (!isOpen) return null
@@ -6900,6 +6948,32 @@ function ScheduleFormModal({
                       <p className="text-apple-caption text-danger mt-1">{errors.care_staff_name}</p>
                     )}
                   </div>
+
+                  {/* 護理人員薪資歷史記錄提示 */}
+                  {formData.staff_id && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg">📋</span>
+                        <span className="text-sm font-medium text-blue-800">
+                          最近 5 次記錄 ({formData.staff_id} {formData.care_staff_name})
+                        </span>
+                      </div>
+                      {staffSalaryHistoryLoading ? (
+                        <div className="text-sm text-blue-600 animate-pulse">載入中...</div>
+                      ) : staffSalaryHistory.length > 0 ? (
+                        <div className="space-y-1">
+                          {staffSalaryHistory.map((record, index) => (
+                            <div key={index} className="text-sm text-blue-700 font-mono bg-white/50 px-2 py-1 rounded">
+                              <span className="inline-block w-4 text-blue-500">{'①②③④⑤'[index]}</span>
+                              {' '}{record.service_date} | {record.customer_name || '未知客戶'} | 薪資: ${record.staff_salary?.toLocaleString() || 0} | 時薪: ${record.hourly_salary?.toLocaleString() || 0}/小時
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-blue-600">暫無歷史記錄</div>
+                      )}
+                    </div>
+                  )}
 
                   {/* 護理人員編號（自動帶入） */}
                   <div>
