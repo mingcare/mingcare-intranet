@@ -191,6 +191,18 @@ function ReportsCalendarView({
     console.log('📅 recordUpdateTimes 鍵數量:', recordUpdateTimes ? Object.keys(recordUpdateTimes).length : 0)
   }, [recordUpdateTimes])
 
+  // 當 filters 的日期範圍變化時，自動跳轉月曆到對應月份
+  useEffect(() => {
+    if (filters.dateRange?.start) {
+      const filterStartDate = new Date(filters.dateRange.start)
+      // 只有當月份不同時才更新，避免不必要的重新渲染
+      if (filterStartDate.getFullYear() !== currentDate.getFullYear() || 
+          filterStartDate.getMonth() !== currentDate.getMonth()) {
+        setCurrentDate(filterStartDate)
+      }
+    }
+  }, [filters.dateRange?.start])
+
   // 監聽螢幕尺寸變化
   useEffect(() => {
     const handleResize = () => {
@@ -1933,6 +1945,18 @@ function ScheduleTab({
 
   // 社區券統計更新觸發器
   const [voucherUpdateTrigger, setVoucherUpdateTrigger] = useState(0)
+
+  // 當 filters 的日期範圍變化時，自動跳轉月曆到對應月份
+  useEffect(() => {
+    if (filters.dateRange?.start) {
+      const filterStartDate = new Date(filters.dateRange.start)
+      // 只有當月份不同時才更新，避免不必要的重新渲染
+      if (filterStartDate.getFullYear() !== currentDate.getFullYear() || 
+          filterStartDate.getMonth() !== currentDate.getMonth()) {
+        setCurrentDate(filterStartDate)
+      }
+    }
+  }, [filters.dateRange?.start])
 
   // 載入月曆數據
   useEffect(() => {
