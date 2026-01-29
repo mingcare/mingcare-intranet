@@ -2054,7 +2054,7 @@ function ScheduleTab({
 
       // 建立上月服務客戶集合及其 project_category
       const lastMonthCustomers = new Map<string, string>()
-      ;(lastMonthRecords || []).forEach(record => {
+      ;(lastMonthRecords || []).forEach((record: { customer_id: string | null; customer_name: string | null; project_category: string | null }) => {
         const key = record.customer_id || record.customer_name
         if (key && !lastMonthCustomers.has(key)) {
           lastMonthCustomers.set(key, record.project_category || '')
@@ -2069,8 +2069,8 @@ function ScheduleTab({
         .lte('service_date', currentMonthEnd)
 
       const currentMonthCustomers = new Set<string>()
-      ;(currentMonthRecords || []).forEach(record => {
-        currentMonthCustomers.add(record.customer_id || record.customer_name)
+      ;(currentMonthRecords || []).forEach((record: { customer_id: string | null; customer_name: string | null }) => {
+        currentMonthCustomers.add(record.customer_id || record.customer_name || '')
       })
 
       // 組合客戶列表
