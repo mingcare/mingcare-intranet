@@ -1,6 +1,6 @@
 ========================================================================
 明護 Supabase 數據庫架構文檔 — 雙項目系統
-更新日期: 2026-01-26
+更新日期: 2026-01-29
 ========================================================================
 
 本系統採用雙 Supabase 項目架構：
@@ -420,7 +420,7 @@ copay_level = 自付比例等級
 | PC-到⼾看顧(輔助⼈員) | $248 |
 | RT-復康運動(OTA輔助⼈員) | $248 |
 
-### [public.financial_transactions] — 財務交易記錄表 (1,785條記錄) 🆕
+### [public.financial_transactions] — 財務交易記錄表 (1,895條記錄) 🆕
 **用途**: 存儲公司所有財務交易記錄，包括收入和支出
 - id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
 - journal_number (varchar(20)) = 流水號: 00000001, 00000002...
@@ -439,6 +439,7 @@ copay_level = 自付比例等級
 - reimbursement_status (varchar(50)) = 報銷狀態
 - notes (text) = 備註
 - deduct_from_petty_cash (boolean) = 是否從零用金扣除
+- sort_order (integer, default 0) = 同日排序順序 🆕
 - is_deleted (boolean, default false) = 是否已刪除
 - created_by (text) = 建立者
 - updated_by (text) = 更新者
@@ -469,13 +470,14 @@ copay_level = 自付比例等級
 - idx_ft_income_category (income_category)
 - idx_ft_expense_category (expense_category)
 - idx_ft_journal_number (journal_number)
+- idx_ft_sort_order (transaction_date, sort_order) 🆕
 
 ### [public.global_journal_sequence] — 流水號序列表 (1條記錄) 🆕
 **用途**: 追蹤財務交易的流水號序列
 - id (integer, PRIMARY KEY, default 1) = 序列 ID (固定為1)
 - last_number (integer, default 0) = 最後使用的序號
 
-**當前狀態**: last_number = 1801 (下一筆交易將為 00001802)
+**當前狀態**: last_number = 1818 (下一筆交易將為 00001819)
 
 ### [public.accounting_handlers] — 經手人選項表 (4條記錄) 🆕
 **用途**: 財務交易經手人的下拉選單來源
