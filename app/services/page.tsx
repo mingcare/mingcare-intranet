@@ -2075,7 +2075,7 @@ function ScheduleTab({
 
       // 組合客戶列表
       let customerList = (customers || []).map((customer: { customer_id: string | null; customer_name: string | null; phone: string | null; service_address: string | null; customer_type: string | null }) => {
-        const key = customer.customer_id || customer.customer_name
+        const key = customer.customer_id || customer.customer_name || ''
         const hasLastMonthService = lastMonthCustomers.has(key)
         const projectCategory = lastMonthCustomers.get(key) || ''
         return {
