@@ -6640,7 +6640,7 @@ function ScheduleFormModal({
         hourly_rate: 0,
         hourly_salary: 0,
         service_type: '',
-        project_category: preselectedCustomer.project_category || '',
+        project_category: (preselectedCustomer.project_category || '') as ProjectCategory | '',
         project_manager: ''
       }
     } else {
