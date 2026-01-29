@@ -586,18 +586,35 @@ export default function AccountingPage() {
 
   // 獲取下一個流水號
   const getNextJournalNumber = async () => {
+    // 從 global_journal_sequence 表獲取
+    const { data: seqData, error: seqError } = await supabase
+      .from('global_journal_sequence')
+      .select('last_number')
+      .eq('id', 1)
+      .single()
+
+    if (!seqError && seqData) {
+      const nextNumber = seqData.last_number + 1
+      return nextNumber.toString().padStart(8, '0')
+    }
+
+    // 備用方案：從 financial_transactions 找最大的數字流水號
     const { data, error } = await supabase
       .from('financial_transactions')
       .select('journal_number')
-      .order('journal_number', { ascending: false })
-      .limit(1)
 
     if (error || !data || data.length === 0) {
       return '00000001'
     }
 
-    const lastNumber = parseInt(data[0].journal_number, 10)
-    const nextNumber = lastNumber + 1
+    // 只考慮純數字的 journal_number
+    const numericOnly = data.filter(r => /^\d+$/.test(r.journal_number))
+    if (numericOnly.length === 0) {
+      return '00000001'
+    }
+
+    const maxNumber = Math.max(...numericOnly.map(r => parseInt(r.journal_number, 10)))
+    const nextNumber = maxNumber + 1
     return nextNumber.toString().padStart(8, '0')
   }
 
