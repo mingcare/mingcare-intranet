@@ -1275,7 +1275,7 @@ export default function AccountingPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className={`grid grid-cols-2 gap-4 ${selectedMonth !== 'all' && pettyCashStats.openingBalance !== 0 ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
             {selectedMonth !== 'all' && pettyCashStats.openingBalance !== 0 && (
               <div className="card-apple bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
                 <div className="card-apple-content text-center">
@@ -1292,13 +1292,13 @@ export default function AccountingPage() {
             </div>
             <div className="card-apple bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
               <div className="card-apple-content text-center">
-                <p className="text-xs text-green-600 dark:text-green-400 mb-1">本月補充</p>
+                <p className="text-xs text-green-600 dark:text-green-400 mb-1">{selectedMonth === 'all' ? '總補充' : '本月補充'}</p>
                 <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatCurrency(pettyCashStats.totalIn)}</p>
               </div>
             </div>
             <div className="card-apple bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20">
               <div className="card-apple-content text-center">
-                <p className="text-xs text-red-600 dark:text-red-400 mb-1">本月支出</p>
+                <p className="text-xs text-red-600 dark:text-red-400 mb-1">{selectedMonth === 'all' ? '總支出' : '本月支出'}</p>
                 <p className="text-xl font-bold text-red-700 dark:text-red-300">{formatCurrency(pettyCashStats.totalOut)}</p>
               </div>
             </div>
