@@ -756,19 +756,26 @@ export default function AccountingPage() {
 
   // 批量提交所有帳目
   const submitAllTransactions = async () => {
-    // 如果當前表單有填寫內容，先檢查是否要加入
+    // 建立要提交的交易清單（從現有 pendingTransactions 開始）
+    let allTransactions = [...pendingTransactions]
+    
+    // 如果當前表單有填寫內容，先加入到提交清單
     if (editingTransaction && editingTransaction.transaction_item.trim()) {
       if (!validateCurrentForm()) return
-      // 先把當前的加入清單
-      addToPendingList()
+      
+      // 直接構建新項目並加入（不依賴 state 更新）
+      const newItem = {
+        tempId: Date.now().toString(),
+        journalNumber: editingTransaction.journal_number,
+        billingYear,
+        billingMonthNum,
+        transactionType: transactionType!,
+        data: { ...editingTransaction }
+      }
+      allTransactions = [...allTransactions, newItem]
     }
     
-    const allTransactions = [...pendingTransactions]
-    
-    // 如果當前表單剛填好且通過驗證，已經在 addToPendingList 中加入了
-    // 重新獲取最新的 pendingTransactions
-    
-    if (allTransactions.length === 0 && (!editingTransaction || !editingTransaction.transaction_item.trim())) {
+    if (allTransactions.length === 0) {
       alert('請至少新增一筆帳目')
       return
     }
@@ -808,6 +815,13 @@ export default function AccountingPage() {
         setSaving(false)
         return
       }
+      
+      // 更新 global_journal_sequence 表的 last_number
+      const maxJournalNumber = Math.max(...allTransactions.map(item => parseInt(item.journalNumber, 10)))
+      await supabase
+        .from('global_journal_sequence')
+        .update({ last_number: maxJournalNumber })
+        .eq('id', 1)
       
       // 批量記錄審計日誌
       if (data && data.length > 0) {
