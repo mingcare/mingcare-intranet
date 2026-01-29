@@ -863,13 +863,14 @@ export default function AccountingPage() {
   const createTransaction = async () => {
     if (!editingTransaction) return
     
-    if (!validateCurrentForm()) return
-    
-    // 如果有待提交清單，使用批量提交
+    // 如果有待提交清單，使用批量提交（批量提交會自行處理驗證）
     if (pendingTransactions.length > 0) {
       await submitAllTransactions()
       return
     }
+    
+    // 只有單筆提交時才驗證當前表單
+    if (!validateCurrentForm()) return
     
     setSaving(true)
     
