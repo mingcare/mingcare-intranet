@@ -2073,8 +2073,20 @@ function ScheduleTab({
         currentMonthCustomers.add(record.customer_id || record.customer_name || '')
       })
 
+      // 定義客戶列表項目類型
+      type GlobalPickerCustomerItem = {
+        customer_id: string
+        customer_name: string
+        phone: string
+        service_address: string
+        customer_type: string
+        project_category: string
+        hasLastMonthService: boolean
+        hasCurrentMonthSchedule: boolean
+      }
+
       // 組合客戶列表
-      let customerList = (customers || []).map((customer: { customer_id: string | null; customer_name: string | null; phone: string | null; service_address: string | null; customer_type: string | null }) => {
+      let customerList: GlobalPickerCustomerItem[] = (customers || []).map((customer: { customer_id: string | null; customer_name: string | null; phone: string | null; service_address: string | null; customer_type: string | null }) => {
         const key = customer.customer_id || customer.customer_name || ''
         const hasLastMonthService = lastMonthCustomers.has(key)
         const projectCategory = lastMonthCustomers.get(key) || ''
