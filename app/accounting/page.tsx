@@ -1315,7 +1315,7 @@ export default function AccountingPage() {
             </div>
             <div className="p-6 space-y-5">
               
-              {/* 第一行：流水號 + 日期 + 帳單月份 */}
+              {/* 第一行：流水號 + 日期 + 帳單所屬月份 */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-tertiary mb-1">流水號</label>
@@ -1334,7 +1334,7 @@ export default function AccountingPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-tertiary mb-1">帳單月份 <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-text-tertiary mb-1">帳單所屬月份 <span className="text-red-500">*</span></label>
                   <div className="flex gap-1">
                     <select
                       value={billingYear}
