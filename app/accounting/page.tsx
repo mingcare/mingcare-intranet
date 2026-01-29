@@ -103,11 +103,17 @@ export default function AccountingPage() {
   // 零用金歷史累計餘額（用於計算上月結餘）
   const [pettyCashHistoricalBalance, setPettyCashHistoricalBalance] = useState<Record<string, number>>({})
 
+  // 交易項目自動完成
+  const [transactionItemSuggestions, setTransactionItemSuggestions] = useState<string[]>([])
+  const [showItemSuggestions, setShowItemSuggestions] = useState(false)
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
+
   useEffect(() => {
     checkUser()
     fetchCategories()
     fetchAvailableYears()
     fetchPettyCashHistoricalBalance()
+    fetchTransactionItemSuggestions()
   }, [])
 
   useEffect(() => {
@@ -204,6 +210,55 @@ export default function AccountingPage() {
     })
 
     setPettyCashHistoricalBalance(monthlyBalance)
+  }
+
+  // 獲取歷史交易項目（用於自動完成）
+  const fetchTransactionItemSuggestions = async () => {
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .select('transaction_item')
+      .or('is_deleted.is.null,is_deleted.eq.false')
+      .order('created_at', { ascending: false })
+    
+    if (data && !error) {
+      // 獲取不重複的項目名稱，並按出現頻率排序
+      const itemCounts: Record<string, number> = {}
+      data.forEach((t: { transaction_item: string }) => {
+        const item = t.transaction_item?.trim()
+        if (item) {
+          itemCounts[item] = (itemCounts[item] || 0) + 1
+        }
+      })
+      
+      // 按頻率排序
+      const sortedItems = Object.entries(itemCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([item]) => item)
+      
+      setTransactionItemSuggestions(sortedItems)
+    }
+  }
+
+  // 處理交易項目輸入變化
+  const handleTransactionItemChange = (value: string) => {
+    setEditingTransaction({ ...editingTransaction!, transaction_item: value })
+    
+    if (value.trim().length > 0) {
+      // 過濾匹配的建議
+      const filtered = transactionItemSuggestions.filter(item =>
+        item.toLowerCase().includes(value.toLowerCase())
+      ).slice(0, 10)  // 最多顯示 10 個
+      setFilteredSuggestions(filtered)
+      setShowItemSuggestions(filtered.length > 0)
+    } else {
+      setShowItemSuggestions(false)
+    }
+  }
+
+  // 選擇建議項目
+  const selectSuggestion = (item: string) => {
+    setEditingTransaction({ ...editingTransaction!, transaction_item: item })
+    setShowItemSuggestions(false)
   }
 
   // 載入所有類別選項
@@ -1563,15 +1618,48 @@ export default function AccountingPage() {
               </div>
 
               {/* 交易項目 */}
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-medium text-text-tertiary mb-1">交易項目 <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={editingTransaction.transaction_item}
-                  onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_item: e.target.value })}
+                  onChange={(e) => handleTransactionItemChange(e.target.value)}
+                  onFocus={() => {
+                    if (editingTransaction.transaction_item.trim().length > 0) {
+                      const filtered = transactionItemSuggestions.filter(item =>
+                        item.toLowerCase().includes(editingTransaction.transaction_item.toLowerCase())
+                      ).slice(0, 10)
+                      setFilteredSuggestions(filtered)
+                      setShowItemSuggestions(filtered.length > 0)
+                    }
+                  }}
+                  onBlur={() => {
+                    // 延遲關閉以允許點擊選擇
+                    setTimeout(() => setShowItemSuggestions(false), 200)
+                  }}
                   className="input-apple w-full"
-                  placeholder="請輸入交易項目描述"
+                  placeholder="輸入關鍵字搜尋歷史項目..."
+                  autoComplete="off"
                 />
+                {/* 自動完成下拉選單 */}
+                {showItemSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    {filteredSuggestions.map((item, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          selectSuggestion(item)
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary/10 transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center gap-2"
+                      >
+                        <span className="text-text-tertiary">🔍</span>
+                        <span className="text-text-primary">{item}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* 付款方式 + 經手人 */}
