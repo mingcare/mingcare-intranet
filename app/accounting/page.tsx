@@ -334,12 +334,12 @@ export default function AccountingPage() {
   // 篩選流水帳交易：
   // 1. 銀行轉賬（所有，包括 Petty Cash 補充）
   // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
-  // 3. 現金交易但明確標記不從零用金扣除的（收入或支出都包括）
+  // 3. 所有現金交易（包括從零用金扣除的支出）
   const getLedgerTransactions = () => {
     let filtered = transactions.filter(t => 
       t.payment_method === '銀行轉賬' ||
       !t.payment_method ||  // 付款方式為空的顯示在流水帳
-      (t.payment_method === '現金' && t.deduct_from_petty_cash === false)  // 現金但不從零用金扣除
+      t.payment_method === '現金'  // 所有現金交易都顯示在流水帳
     )
 
     if (selectedMonth !== 'all') {
