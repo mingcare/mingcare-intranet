@@ -1112,23 +1112,27 @@ export default function AccountingPage() {
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
     const swapTxn = sameDayTxns[swapIndex]
 
-    // 交換 sort_order
-    const currentSortOrder = txn.sort_order ?? currentIndex
-    const swapSortOrder = swapTxn.sort_order ?? swapIndex
+    // 使用索引位置作為 sort_order（確保不同值）
+    const newCurrentSortOrder = swapIndex  // 當前項目移到對方位置
+    const newSwapSortOrder = currentIndex  // 對方移到當前位置
+
+    console.log('Moving:', txn.transaction_item, 'from', currentIndex, 'to', swapIndex)
+    console.log('Swapping with:', swapTxn.transaction_item)
 
     // 更新數據庫
     const { error: error1 } = await supabase
       .from('financial_transactions')
-      .update({ sort_order: swapSortOrder })
+      .update({ sort_order: newCurrentSortOrder })
       .eq('id', txn.id)
 
     const { error: error2 } = await supabase
       .from('financial_transactions')
-      .update({ sort_order: currentSortOrder })
+      .update({ sort_order: newSwapSortOrder })
       .eq('id', swapTxn.id)
 
     if (error1 || error2) {
       console.error('Error updating sort order:', error1 || error2)
+      alert('排序更新失敗')
       return
     }
 
