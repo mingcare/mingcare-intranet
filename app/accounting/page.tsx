@@ -73,6 +73,18 @@ export default function AccountingPage() {
   const [currentUser, setCurrentUser] = useState<string>('')
   const [saving, setSaving] = useState(false)
   
+  // 批量新增相關狀態
+  const [pendingTransactions, setPendingTransactions] = useState<Array<{
+    tempId: string
+    journalNumber: string
+    billingYear: number
+    billingMonthNum: number
+    transactionType: 'income' | 'expense'
+    data: FinancialTransaction
+  }>>([])
+  const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null)  // 正在編輯的待提交項目索引
+  const [nextTempJournalNumber, setNextTempJournalNumber] = useState<string>('')  // 下一個流水號
+  
   // 審計日誌
   const [showAuditLog, setShowAuditLog] = useState(false)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -537,6 +549,9 @@ export default function AccountingPage() {
     setBillingYear(currentYear)
     setBillingMonthNum(currentMonth)
     setTransactionType(null)  // 重置交易類型
+    setPendingTransactions([])  // 清空待提交清單
+    setEditingPendingIndex(null)
+    setNextTempJournalNumber(nextJournalNumber)
     
     setEditingTransaction({
       id: '',
@@ -560,32 +575,220 @@ export default function AccountingPage() {
     setShowEditModal(true)
   }
 
-  // 新增交易
-  const createTransaction = async () => {
-    if (!editingTransaction) return
+  // 驗證當前表單
+  const validateCurrentForm = (): boolean => {
+    if (!editingTransaction) return false
     
     if (!editingTransaction.transaction_item.trim()) {
       alert('請輸入交易項目')
-      return
+      return false
     }
     if (!editingTransaction.transaction_date) {
       alert('請選擇交易日期')
-      return
+      return false
     }
     if (!editingTransaction.payment_method) {
       alert('請選擇付款方式')
-      return
+      return false
     }
     if (!transactionType) {
       alert('請選擇交易類型（收入或支出）')
-      return
+      return false
     }
     if (transactionType === 'income' && (!editingTransaction.income_category || editingTransaction.income_amount === 0)) {
       alert('請選擇收入類別並輸入收入金額')
-      return
+      return false
     }
     if (transactionType === 'expense' && (!editingTransaction.expense_category || editingTransaction.expense_amount === 0)) {
       alert('請選擇支出類別並輸入支出金額')
+      return false
+    }
+    return true
+  }
+
+  // 加入待提交清單
+  const addToPendingList = () => {
+    if (!validateCurrentForm() || !editingTransaction || !transactionType) return
+    
+    const today = new Date().toISOString().split('T')[0]
+    const currentYear = new Date().getFullYear()
+    const currentMonth = new Date().getMonth() + 1
+    
+    if (editingPendingIndex !== null) {
+      // 更新已有的待提交項目
+      const updatedList = [...pendingTransactions]
+      updatedList[editingPendingIndex] = {
+        tempId: pendingTransactions[editingPendingIndex].tempId,
+        journalNumber: editingTransaction.journal_number,
+        billingYear,
+        billingMonthNum,
+        transactionType,
+        data: { ...editingTransaction }
+      }
+      setPendingTransactions(updatedList)
+      setEditingPendingIndex(null)
+    } else {
+      // 新增到待提交清單
+      setPendingTransactions([...pendingTransactions, {
+        tempId: Date.now().toString(),
+        journalNumber: editingTransaction.journal_number,
+        billingYear,
+        billingMonthNum,
+        transactionType,
+        data: { ...editingTransaction }
+      }])
+      
+      // 計算下一個流水號
+      const nextNum = parseInt(editingTransaction.journal_number, 10) + 1
+      const nextJournalNumber = nextNum.toString().padStart(8, '0')
+      setNextTempJournalNumber(nextJournalNumber)
+    }
+    
+    // 重置表單準備輸入下一筆
+    setBillingYear(currentYear)
+    setBillingMonthNum(currentMonth)
+    setTransactionType(null)
+    
+    const nextNum = editingPendingIndex !== null 
+      ? parseInt(nextTempJournalNumber, 10)
+      : parseInt(editingTransaction.journal_number, 10) + 1
+    const nextJournalNumber = nextNum.toString().padStart(8, '0')
+    
+    setEditingTransaction({
+      id: '',
+      journal_number: nextJournalNumber,
+      transaction_code: '',
+      fiscal_year: currentYear,
+      billing_month: `${currentYear}年${currentMonth}月`,
+      transaction_date: today,
+      transaction_item: '',
+      payment_method: '',
+      income_category: null,
+      income_amount: 0,
+      expense_category: null,
+      expense_amount: 0,
+      handler: null,
+      reimbursement_status: null,
+      notes: null,
+      deduct_from_petty_cash: true
+    })
+  }
+
+  // 編輯待提交項目
+  const editPendingItem = (index: number) => {
+    const item = pendingTransactions[index]
+    setEditingTransaction({ ...item.data })
+    setBillingYear(item.billingYear)
+    setBillingMonthNum(item.billingMonthNum)
+    setTransactionType(item.transactionType)
+    setEditingPendingIndex(index)
+  }
+
+  // 刪除待提交項目
+  const deletePendingItem = (index: number) => {
+    const updatedList = pendingTransactions.filter((_, i) => i !== index)
+    setPendingTransactions(updatedList)
+    if (editingPendingIndex === index) {
+      setEditingPendingIndex(null)
+    } else if (editingPendingIndex !== null && editingPendingIndex > index) {
+      setEditingPendingIndex(editingPendingIndex - 1)
+    }
+  }
+
+  // 批量提交所有帳目
+  const submitAllTransactions = async () => {
+    // 如果當前表單有填寫內容，先檢查是否要加入
+    if (editingTransaction && editingTransaction.transaction_item.trim()) {
+      if (!validateCurrentForm()) return
+      // 先把當前的加入清單
+      addToPendingList()
+    }
+    
+    const allTransactions = [...pendingTransactions]
+    
+    // 如果當前表單剛填好且通過驗證，已經在 addToPendingList 中加入了
+    // 重新獲取最新的 pendingTransactions
+    
+    if (allTransactions.length === 0 && (!editingTransaction || !editingTransaction.transaction_item.trim())) {
+      alert('請至少新增一筆帳目')
+      return
+    }
+    
+    setSaving(true)
+    
+    try {
+      // 準備批量插入的數據
+      const insertData = allTransactions.map(item => ({
+        journal_number: item.journalNumber,
+        transaction_code: '',
+        fiscal_year: item.billingYear,
+        billing_month: `${item.billingYear}年${item.billingMonthNum}月`,
+        transaction_date: item.data.transaction_date,
+        transaction_item: item.data.transaction_item,
+        payment_method: item.data.payment_method,
+        income_category: item.data.income_category,
+        income_amount: item.data.income_amount || 0,
+        expense_category: item.data.expense_category,
+        expense_amount: item.data.expense_amount || 0,
+        handler: item.data.handler,
+        reimbursement_status: item.data.reimbursement_status,
+        notes: item.data.notes,
+        deduct_from_petty_cash: item.data.payment_method === '現金' ? item.data.deduct_from_petty_cash : null,
+        created_by: currentUser,
+        is_deleted: false
+      }))
+      
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .insert(insertData)
+        .select()
+      
+      if (error) {
+        console.error('Error creating:', error)
+        alert('新增失敗: ' + error.message)
+        setSaving(false)
+        return
+      }
+      
+      // 批量記錄審計日誌
+      if (data && data.length > 0) {
+        const auditLogs = data.map((txn: any) => ({
+          transaction_id: txn.id,
+          journal_number: txn.journal_number,
+          action_type: 'create',
+          changed_fields: ['all'],
+          old_values: {},
+          new_values: txn,
+          performed_by: currentUser
+        }))
+        
+        await supabase.from('financial_audit_log').insert(auditLogs)
+      }
+      
+      setShowEditModal(false)
+      setIsCreating(false)
+      setSaving(false)
+      setPendingTransactions([])
+      setEditingPendingIndex(null)
+      fetchTransactions()
+      fetchPettyCashHistoricalBalance()
+      alert(`成功新增 ${allTransactions.length} 筆帳目！`)
+    } catch (err) {
+      console.error('Error:', err)
+      alert('新增失敗')
+      setSaving(false)
+    }
+  }
+
+  // 新增單筆交易（保留原有功能，用於直接提交當前表單）
+  const createTransaction = async () => {
+    if (!editingTransaction) return
+    
+    if (!validateCurrentForm()) return
+    
+    // 如果有待提交清單，使用批量提交
+    if (pendingTransactions.length > 0) {
+      await submitAllTransactions()
       return
     }
     
@@ -639,6 +842,7 @@ export default function AccountingPage() {
     setShowEditModal(false)
     setIsCreating(false)
     setSaving(false)
+    setPendingTransactions([])
     fetchTransactions()
     fetchPettyCashHistoricalBalance()
     alert('新增成功！')
@@ -1563,23 +1767,120 @@ export default function AccountingPage() {
                   />
                 </div>
               </div>
+
+              {/* 新增：加入清單按鈕（僅新增模式） */}
+              {isCreating && (
+                <button
+                  type="button"
+                  onClick={addToPendingList}
+                  className="w-full py-3 rounded-xl border-2 border-dashed border-primary/50 text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2 font-medium"
+                >
+                  <span className="text-lg">➕</span>
+                  {editingPendingIndex !== null ? '更新此帳目' : '加入清單並繼續新增'}
+                </button>
+              )}
+
+              {/* 待提交帳目清單（僅新增模式） */}
+              {isCreating && pendingTransactions.length > 0 && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                      <span>📋</span>
+                      待提交帳目
+                      <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">{pendingTransactions.length}</span>
+                    </h4>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {pendingTransactions.map((item, index) => (
+                      <div 
+                        key={item.tempId} 
+                        className={`p-3 bg-white dark:bg-gray-800 rounded-lg border ${
+                          editingPendingIndex === index 
+                            ? 'border-primary ring-2 ring-primary/30' 
+                            : 'border-gray-200 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-mono text-text-tertiary">{item.journalNumber}</span>
+                              <span className="text-xs text-text-tertiary">{item.data.transaction_date}</span>
+                              <span className="text-xs text-text-tertiary">{item.billingYear}年{item.billingMonthNum}月</span>
+                            </div>
+                            <p className="text-sm font-medium text-text-primary truncate">{item.data.transaction_item}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {item.transactionType === 'income' ? (
+                                <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  +${item.data.income_amount?.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                  -${item.data.expense_amount?.toLocaleString()}
+                                </span>
+                              )}
+                              <span className="text-xs text-text-tertiary">{item.data.payment_method}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => editPendingItem(index)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
+                              title="修改"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deletePendingItem(index)}
+                              className="p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-lg transition-colors"
+                              title="刪除"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* 底部按鈕 */}
             <div className="sticky bottom-0 bg-bg-primary px-6 py-4 border-t border-border-light flex justify-end gap-3">
               <button
-                onClick={() => { setShowEditModal(false); setIsCreating(false); }}
+                onClick={() => { 
+                  setShowEditModal(false)
+                  setIsCreating(false)
+                  setPendingTransactions([])
+                  setEditingPendingIndex(null)
+                }}
                 className="px-5 py-2.5 rounded-xl border border-border-light text-text-secondary hover:bg-bg-secondary transition-colors"
               >
                 取消
               </button>
-              <button
-                onClick={isCreating ? createTransaction : saveTransaction}
-                disabled={saving}
-                className="px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"
-              >
-                {saving ? '處理中...' : isCreating ? '新增' : '儲存'}
-              </button>
+              {isCreating ? (
+                <button
+                  onClick={createTransaction}
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"
+                >
+                  {saving ? '處理中...' : pendingTransactions.length > 0 ? `提交全部 (${pendingTransactions.length + (editingTransaction?.transaction_item?.trim() ? 1 : 0)})` : '新增'}
+                </button>
+              ) : (
+                <button
+                  onClick={saveTransaction}
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"
+                >
+                  {saving ? '處理中...' : '儲存'}
+                </button>
+              )}
             </div>
           </div>
         </div>
