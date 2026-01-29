@@ -104,9 +104,9 @@ export default function AccountingPage() {
   const [pettyCashHistoricalBalance, setPettyCashHistoricalBalance] = useState<Record<string, number>>({})
 
   // 交易項目自動完成
-  const [transactionItemSuggestions, setTransactionItemSuggestions] = useState<string[]>([])
+  const [transactionItemSuggestions, setTransactionItemSuggestions] = useState<Array<{ item: string; billingMonth: string }>>([])
   const [showItemSuggestions, setShowItemSuggestions] = useState(false)
-  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
+  const [filteredSuggestions, setFilteredSuggestions] = useState<Array<{ item: string; billingMonth: string }>>([])
 
   useEffect(() => {
     checkUser()
@@ -216,24 +216,28 @@ export default function AccountingPage() {
   const fetchTransactionItemSuggestions = async () => {
     const { data, error } = await supabase
       .from('financial_transactions')
-      .select('transaction_item')
+      .select('transaction_item, billing_month')
       .or('is_deleted.is.null,is_deleted.eq.false')
       .order('created_at', { ascending: false })
     
     if (data && !error) {
-      // 獲取不重複的項目名稱，並按出現頻率排序
-      const itemCounts: Record<string, number> = {}
-      data.forEach((t: { transaction_item: string }) => {
+      // 保留每個項目及其最近的帳單月份，並按出現頻率排序
+      const itemMap: Record<string, { count: number; billingMonth: string }> = {}
+      data.forEach((t: { transaction_item: string; billing_month: string }) => {
         const item = t.transaction_item?.trim()
         if (item) {
-          itemCounts[item] = (itemCounts[item] || 0) + 1
+          if (!itemMap[item]) {
+            itemMap[item] = { count: 1, billingMonth: t.billing_month || '' }
+          } else {
+            itemMap[item].count += 1
+          }
         }
       })
       
       // 按頻率排序
-      const sortedItems = Object.entries(itemCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([item]) => item)
+      const sortedItems = Object.entries(itemMap)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([item, info]) => ({ item, billingMonth: info.billingMonth }))
       
       setTransactionItemSuggestions(sortedItems)
     }
@@ -245,8 +249,8 @@ export default function AccountingPage() {
     
     if (value.trim().length > 0) {
       // 過濾匹配的建議
-      const filtered = transactionItemSuggestions.filter(item =>
-        item.toLowerCase().includes(value.toLowerCase())
+      const filtered = transactionItemSuggestions.filter(suggestion =>
+        suggestion.item.toLowerCase().includes(value.toLowerCase())
       ).slice(0, 10)  // 最多顯示 10 個
       setFilteredSuggestions(filtered)
       setShowItemSuggestions(filtered.length > 0)
@@ -1626,8 +1630,8 @@ export default function AccountingPage() {
                   onChange={(e) => handleTransactionItemChange(e.target.value)}
                   onFocus={() => {
                     if (editingTransaction.transaction_item.trim().length > 0) {
-                      const filtered = transactionItemSuggestions.filter(item =>
-                        item.toLowerCase().includes(editingTransaction.transaction_item.toLowerCase())
+                      const filtered = transactionItemSuggestions.filter(suggestion =>
+                        suggestion.item.toLowerCase().includes(editingTransaction.transaction_item.toLowerCase())
                       ).slice(0, 10)
                       setFilteredSuggestions(filtered)
                       setShowItemSuggestions(filtered.length > 0)
@@ -1644,18 +1648,25 @@ export default function AccountingPage() {
                 {/* 自動完成下拉選單 */}
                 {showItemSuggestions && filteredSuggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                    {filteredSuggestions.map((item, index) => (
+                    {filteredSuggestions.map((suggestion, index) => (
                       <button
                         key={index}
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault()
-                          selectSuggestion(item)
+                          selectSuggestion(suggestion.item)
                         }}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary/10 transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center gap-2"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary/10 transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between"
                       >
-                        <span className="text-text-tertiary">🔍</span>
-                        <span className="text-text-primary">{item}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-text-tertiary">🔍</span>
+                          <span className="text-text-primary">{suggestion.item}</span>
+                        </div>
+                        {suggestion.billingMonth && (
+                          <span className="text-xs text-text-tertiary bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                            {suggestion.billingMonth}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
