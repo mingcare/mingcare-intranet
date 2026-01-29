@@ -6323,6 +6323,15 @@ function ScheduleFormModal({
   }[]>([])
   const [staffSalaryHistoryLoading, setStaffSalaryHistoryLoading] = useState(false)
 
+  // 客戶歷史護理人員狀態
+  const [customerStaffHistory, setCustomerStaffHistory] = useState<{
+    staff_id: string
+    care_staff_name: string
+    service_date: string
+    service_count: number
+  }[]>([])
+  const [customerStaffHistoryLoading, setCustomerStaffHistoryLoading] = useState(false)
+
   // 搜尋防抖定時器
   const [customerSearchTimeout, setCustomerSearchTimeout] = useState<NodeJS.Timeout | null>(null)
   const [staffSearchTimeout, setStaffSearchTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -6554,13 +6563,58 @@ function ScheduleFormModal({
   }
 
   // 選擇客戶
-  const selectCustomer = (customer: CustomerSearchResult) => {
+  const selectCustomer = async (customer: CustomerSearchResult) => {
     updateField('customer_name', customer.customer_name || customer.display_text)
     updateField('customer_id', customer.customer_id || '')
     updateField('phone', customer.phone || '')
     updateField('service_address', customer.service_address || '')
     setCustomerSearchTerm(customer.customer_name || customer.display_text)
     setShowCustomerSuggestions(false)
+
+    // 查詢該客戶最近 5 次服務的護理人員
+    if (customer.customer_id || customer.customer_name) {
+      setCustomerStaffHistoryLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('billing_salary_data')
+          .select('staff_id, care_staff_name, service_date')
+          .or(`customer_id.eq.${customer.customer_id},customer_name.eq.${customer.customer_name}`)
+          .order('service_date', { ascending: false })
+          .limit(20)
+
+        if (error) {
+          console.error('查詢客戶歷史護理人員失敗:', error)
+          setCustomerStaffHistory([])
+        } else {
+          // 去重並統計服務次數，取最近 5 個不同的護理人員
+          const staffMap = new Map<string, { staff_id: string, care_staff_name: string, service_date: string, service_count: number }>()
+          for (const record of data || []) {
+            if (record.staff_id && record.care_staff_name) {
+              const existing = staffMap.get(record.staff_id)
+              if (existing) {
+                existing.service_count++
+              } else {
+                staffMap.set(record.staff_id, {
+                  staff_id: record.staff_id,
+                  care_staff_name: record.care_staff_name,
+                  service_date: record.service_date,
+                  service_count: 1
+                })
+              }
+            }
+          }
+          // 取前 5 個
+          setCustomerStaffHistory(Array.from(staffMap.values()).slice(0, 5))
+        }
+      } catch (error) {
+        console.error('查詢客戶歷史護理人員錯誤:', error)
+        setCustomerStaffHistory([])
+      } finally {
+        setCustomerStaffHistoryLoading(false)
+      }
+    } else {
+      setCustomerStaffHistory([])
+    }
   }
 
   // 護理人員搜尋功能
@@ -6946,6 +7000,43 @@ function ScheduleFormModal({
                     )}
                     {errors.care_staff_name && (
                       <p className="text-apple-caption text-danger mt-1">{errors.care_staff_name}</p>
+                    )}
+
+                    {/* 客戶歷史護理人員提示 */}
+                    {formData.customer_name && !formData.staff_id && (
+                      <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">👥</span>
+                          <span className="text-sm font-medium text-green-800">
+                            {formData.customer_name} 的最近護理人員
+                          </span>
+                        </div>
+                        {customerStaffHistoryLoading ? (
+                          <div className="text-sm text-green-600 animate-pulse">載入中...</div>
+                        ) : customerStaffHistory.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {customerStaffHistory.map((staff, index) => (
+                              <button
+                                key={staff.staff_id}
+                                type="button"
+                                onClick={() => {
+                                  updateField('care_staff_name', staff.care_staff_name)
+                                  updateField('staff_id', staff.staff_id)
+                                  setStaffSearchTerm(staff.care_staff_name)
+                                  loadStaffSalaryHistory(staff.staff_id)
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-green-300 rounded-lg text-sm text-green-700 hover:bg-green-100 hover:border-green-400 transition-colors"
+                              >
+                                <span className="font-medium">{staff.care_staff_name}</span>
+                                <span className="text-green-500 text-xs">({staff.staff_id})</span>
+                                <span className="text-green-400 text-xs ml-1">×{staff.service_count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-green-600">暫無歷史記錄</div>
+                        )}
+                      </div>
                     )}
                   </div>
 
