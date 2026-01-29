@@ -6384,6 +6384,129 @@ function ScheduleFormModal({
   }[]>([])
   const [customerStaffHistoryLoading, setCustomerStaffHistoryLoading] = useState(false)
 
+  // 選擇客戶彈窗狀態
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  const [pickerMonth, setPickerMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [pickerCategory, setPickerCategory] = useState<string>('')
+  const [pickerShowAll, setPickerShowAll] = useState(false)
+  const [pickerCustomerList, setPickerCustomerList] = useState<{
+    customer_id: string
+    customer_name: string
+    phone: string
+    service_address: string
+    project_category: string
+    hasLastMonthService: boolean
+    hasCurrentMonthSchedule: boolean
+  }[]>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+
+  // 載入客戶列表
+  const loadPickerCustomers = async () => {
+    setPickerLoading(true)
+    try {
+      // 解析月份
+      const [year, month] = pickerMonth.split('-').map(Number)
+      const currentMonthStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const currentMonthEnd = `${year}-${String(month).padStart(2, '0')}-31`
+      
+      // 上月
+      const lastMonth = month === 1 ? 12 : month - 1
+      const lastMonthYear = month === 1 ? year - 1 : year
+      const lastMonthStart = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`
+      const lastMonthEnd = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-31`
+
+      // 查詢客戶資料
+      let customerQuery = supabase
+        .from('customer_personal_data')
+        .select('customer_id, customer_name, phone, service_address')
+
+      const { data: customers, error: customerError } = await customerQuery
+
+      if (customerError) {
+        console.error('查詢客戶失敗:', customerError)
+        setPickerCustomerList([])
+        return
+      }
+
+      // 查詢上月有服務的客戶
+      const { data: lastMonthRecords } = await supabase
+        .from('billing_salary_data')
+        .select('customer_id, customer_name, project_category')
+        .gte('service_date', lastMonthStart)
+        .lte('service_date', lastMonthEnd)
+
+      // 查詢當月已排更的客戶
+      const { data: currentMonthRecords } = await supabase
+        .from('billing_salary_data')
+        .select('customer_id, customer_name, project_category')
+        .gte('service_date', currentMonthStart)
+        .lte('service_date', currentMonthEnd)
+
+      // 建立上月服務客戶 Set
+      const lastMonthCustomers = new Set(
+        (lastMonthRecords || []).map(r => r.customer_id || r.customer_name)
+      )
+
+      // 建立當月已排更客戶 Set
+      const currentMonthCustomers = new Set(
+        (currentMonthRecords || []).map(r => r.customer_id || r.customer_name)
+      )
+
+      // 建立客戶類別 Map
+      const customerCategoryMap = new Map<string, string>()
+      ;[...(lastMonthRecords || []), ...(currentMonthRecords || [])].forEach(r => {
+        if (r.customer_id && r.project_category) {
+          customerCategoryMap.set(r.customer_id, r.project_category)
+        }
+      })
+
+      // 組合客戶列表
+      let result = (customers || []).map(c => ({
+        customer_id: c.customer_id,
+        customer_name: c.customer_name,
+        phone: c.phone || '',
+        service_address: c.service_address || '',
+        project_category: customerCategoryMap.get(c.customer_id) || '',
+        hasLastMonthService: lastMonthCustomers.has(c.customer_id) || lastMonthCustomers.has(c.customer_name),
+        hasCurrentMonthSchedule: currentMonthCustomers.has(c.customer_id) || currentMonthCustomers.has(c.customer_name)
+      }))
+
+      // 篩選類別
+      if (pickerCategory) {
+        result = result.filter(c => c.project_category === pickerCategory)
+      }
+
+      // 只顯示上月有服務的
+      if (!pickerShowAll) {
+        result = result.filter(c => c.hasLastMonthService)
+      }
+
+      // 排序：上月有服務的先顯示
+      result.sort((a, b) => {
+        if (a.hasLastMonthService && !b.hasLastMonthService) return -1
+        if (!a.hasLastMonthService && b.hasLastMonthService) return 1
+        return a.customer_name.localeCompare(b.customer_name, 'zh-Hant')
+      })
+
+      setPickerCustomerList(result)
+    } catch (error) {
+      console.error('載入客戶列表失敗:', error)
+      setPickerCustomerList([])
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  // 當篩選條件改變時重新載入
+  useEffect(() => {
+    if (showCustomerPicker) {
+      loadPickerCustomers()
+    }
+  }, [showCustomerPicker, pickerMonth, pickerCategory, pickerShowAll])
+
   // 計算機狀態
   const [showCalculator, setShowCalculator] = useState(false)
   const [calcDisplay, setCalcDisplay] = useState('0')
@@ -6935,9 +7058,153 @@ function ScheduleFormModal({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* 客戶姓名（含搜尋功能） */}
                     <div className="relative customer-search-container">
-                      <label className="block text-apple-caption font-medium text-text-primary mb-2">
-                        客戶姓名 <span className="text-danger">*</span>
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-apple-caption font-medium text-text-primary">
+                          客戶姓名 <span className="text-danger">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomerPicker(true)}
+                          className="text-xs px-2 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          📋 選擇客戶
+                        </button>
+                      </div>
+
+                      {/* 選擇客戶彈窗 */}
+                      {showCustomerPicker && (
+                        <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center" onClick={() => setShowCustomerPicker(false)}>
+                          <div className="bg-white rounded-xl w-[90%] max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                            {/* 彈窗標題 */}
+                            <div className="p-4 border-b border-border-light bg-bg-secondary">
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-bold text-text-primary">📋 選擇客戶</h3>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCustomerPicker(false)}
+                                  className="p-1 hover:bg-bg-tertiary rounded-lg transition-colors"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+
+                              {/* 篩選條件 */}
+                              <div className="flex flex-wrap gap-2">
+                                {/* 月份選擇 */}
+                                <input
+                                  type="month"
+                                  value={pickerMonth}
+                                  onChange={e => setPickerMonth(e.target.value)}
+                                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                                />
+
+                                {/* 客戶類別 */}
+                                <select
+                                  value={pickerCategory}
+                                  onChange={e => setPickerCategory(e.target.value)}
+                                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                                >
+                                  <option value="">全部類別</option>
+                                  {PROJECT_CATEGORY_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+
+                                {/* 顯示全部/只顯示上月有服務 */}
+                                <button
+                                  type="button"
+                                  onClick={() => setPickerShowAll(!pickerShowAll)}
+                                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                                    pickerShowAll
+                                      ? 'bg-gray-200 text-gray-700'
+                                      : 'bg-blue-500 text-white'
+                                  }`}
+                                >
+                                  {pickerShowAll ? '顯示全部' : '只顯示上月有服務'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 客戶列表 */}
+                            <div className="overflow-y-auto max-h-[50vh]">
+                              {pickerLoading ? (
+                                <div className="p-8 text-center text-text-secondary">
+                                  <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                                  載入中...
+                                </div>
+                              ) : pickerCustomerList.length === 0 ? (
+                                <div className="p-8 text-center text-text-secondary">
+                                  沒有符合條件的客戶
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-border-light">
+                                  {pickerCustomerList.map((customer, index) => (
+                                    <div
+                                      key={customer.customer_id || index}
+                                      onClick={() => {
+                                        // 選擇客戶
+                                        updateField('customer_name', customer.customer_name)
+                                        updateField('customer_id', customer.customer_id)
+                                        updateField('phone', customer.phone)
+                                        updateField('service_address', customer.service_address)
+                                        if (customer.project_category) {
+                                          updateField('project_category', customer.project_category)
+                                        }
+                                        setCustomerSearchTerm(customer.customer_name)
+                                        setShowCustomerPicker(false)
+                                      }}
+                                      className="p-3 hover:bg-blue-50 cursor-pointer transition-colors"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                          <div className="font-medium text-text-primary">
+                                            {customer.customer_name}
+                                            <span className="text-text-secondary text-sm ml-1">({customer.customer_id})</span>
+                                          </div>
+                                          <div className="text-xs text-text-secondary mt-0.5">
+                                            {customer.project_category && (
+                                              <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mr-2">
+                                                {customer.project_category}
+                                              </span>
+                                            )}
+                                            {customer.phone}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-sm">
+                                          {/* 上月有噧服務 */}
+                                          <span className={`px-2 py-1 rounded text-xs ${
+                                            customer.hasLastMonthService
+                                              ? 'bg-green-100 text-green-700'
+                                              : 'bg-gray-100 text-gray-500'
+                                          }`}>
+                                            上月{customer.hasLastMonthService ? '✓' : '✗'}
+                                          </span>
+                                          {/* 今個月入咗更 */}
+                                          <span className={`px-2 py-1 rounded text-xs ${
+                                            customer.hasCurrentMonthSchedule
+                                              ? 'bg-blue-100 text-blue-700'
+                                              : 'bg-orange-100 text-orange-700'
+                                          }`}>
+                                            本月{customer.hasCurrentMonthSchedule ? '✓' : '✗'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 底部統計 */}
+                            <div className="p-3 border-t border-border-light bg-bg-secondary text-sm text-text-secondary">
+                              共 {pickerCustomerList.length} 位客戶
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <input
                         type="text"
                         value={customerSearchTerm}
