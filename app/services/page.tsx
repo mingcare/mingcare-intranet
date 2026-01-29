@@ -6332,6 +6332,83 @@ function ScheduleFormModal({
   }[]>([])
   const [customerStaffHistoryLoading, setCustomerStaffHistoryLoading] = useState(false)
 
+  // 計算機狀態
+  const [showCalculator, setShowCalculator] = useState(false)
+  const [calcDisplay, setCalcDisplay] = useState('0')
+  const [calcPrevValue, setCalcPrevValue] = useState<number | null>(null)
+  const [calcOperation, setCalcOperation] = useState<string | null>(null)
+  const [calcWaitingForOperand, setCalcWaitingForOperand] = useState(false)
+
+  // 計算機函數
+  const calcInputDigit = (digit: string) => {
+    if (calcWaitingForOperand) {
+      setCalcDisplay(digit)
+      setCalcWaitingForOperand(false)
+    } else {
+      setCalcDisplay(calcDisplay === '0' ? digit : calcDisplay + digit)
+    }
+  }
+
+  const calcInputDot = () => {
+    if (calcWaitingForOperand) {
+      setCalcDisplay('0.')
+      setCalcWaitingForOperand(false)
+    } else if (!calcDisplay.includes('.')) {
+      setCalcDisplay(calcDisplay + '.')
+    }
+  }
+
+  const calcClear = () => {
+    setCalcDisplay('0')
+    setCalcPrevValue(null)
+    setCalcOperation(null)
+    setCalcWaitingForOperand(false)
+  }
+
+  const calcPerformOperation = (nextOperation: string) => {
+    const inputValue = parseFloat(calcDisplay)
+
+    if (calcPrevValue === null) {
+      setCalcPrevValue(inputValue)
+    } else if (calcOperation) {
+      const currentValue = calcPrevValue || 0
+      let result = currentValue
+
+      switch (calcOperation) {
+        case '+': result = currentValue + inputValue; break
+        case '-': result = currentValue - inputValue; break
+        case '×': result = currentValue * inputValue; break
+        case '÷': result = inputValue !== 0 ? currentValue / inputValue : 0; break
+      }
+
+      setCalcDisplay(String(Math.round(result * 100000000) / 100000000))
+      setCalcPrevValue(result)
+    }
+
+    setCalcWaitingForOperand(true)
+    setCalcOperation(nextOperation)
+  }
+
+  const calcEquals = () => {
+    if (!calcOperation || calcPrevValue === null) return
+
+    const inputValue = parseFloat(calcDisplay)
+    const currentValue = calcPrevValue
+    let result = currentValue
+
+    switch (calcOperation) {
+      case '+': result = currentValue + inputValue; break
+      case '-': result = currentValue - inputValue; break
+      case '×': result = currentValue * inputValue; break
+      case '÷': result = inputValue !== 0 ? currentValue / inputValue : 0; break
+    }
+
+    setCalcDisplay(String(Math.round(result * 100000000) / 100000000))
+    setCalcPrevValue(null)
+    setCalcOperation(null)
+    setCalcWaitingForOperand(true)
+  }
+
   // 搜尋防抖定時器
   const [customerSearchTimeout, setCustomerSearchTimeout] = useState<NodeJS.Timeout | null>(null)
   const [staffSearchTimeout, setStaffSearchTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -7120,7 +7197,64 @@ function ScheduleFormModal({
             {/* 卡片 3：收費與工資 */}
             <div className="card-apple border border-border-light">
               <div className="p-6">
-                <h4 className="text-apple-heading text-text-primary mb-4">收費與工資</h4>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-apple-heading text-text-primary">收費與工資</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowCalculator(!showCalculator)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      showCalculator 
+                        ? 'bg-primary text-white' 
+                        : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                    }`}
+                    title="計算機"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* 計算機 UI */}
+                {showCalculator && (
+                  <div className="mb-4 bg-gray-800 rounded-xl p-4 shadow-lg">
+                    {/* 顯示屏 */}
+                    <div className="bg-gray-900 rounded-lg p-3 mb-3">
+                      <div className="text-right text-2xl font-mono text-white truncate">
+                        {calcDisplay}
+                      </div>
+                      {calcOperation && (
+                        <div className="text-right text-xs text-gray-400 mt-1">
+                          {calcPrevValue} {calcOperation}
+                        </div>
+                      )}
+                    </div>
+                    {/* 按鈕區 */}
+                    <div className="grid grid-cols-4 gap-2">
+                      <button type="button" onClick={calcClear} className="col-span-2 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors">C</button>
+                      <button type="button" onClick={() => calcPerformOperation('÷')} className="py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors">÷</button>
+                      <button type="button" onClick={() => calcPerformOperation('×')} className="py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors">×</button>
+                      
+                      <button type="button" onClick={() => calcInputDigit('7')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">7</button>
+                      <button type="button" onClick={() => calcInputDigit('8')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">8</button>
+                      <button type="button" onClick={() => calcInputDigit('9')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">9</button>
+                      <button type="button" onClick={() => calcPerformOperation('-')} className="py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors">-</button>
+                      
+                      <button type="button" onClick={() => calcInputDigit('4')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">4</button>
+                      <button type="button" onClick={() => calcInputDigit('5')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">5</button>
+                      <button type="button" onClick={() => calcInputDigit('6')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">6</button>
+                      <button type="button" onClick={() => calcPerformOperation('+')} className="py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors">+</button>
+                      
+                      <button type="button" onClick={() => calcInputDigit('1')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">1</button>
+                      <button type="button" onClick={() => calcInputDigit('2')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">2</button>
+                      <button type="button" onClick={() => calcInputDigit('3')} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">3</button>
+                      <button type="button" onClick={calcEquals} className="row-span-2 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors">=</button>
+                      
+                      <button type="button" onClick={() => calcInputDigit('0')} className="col-span-2 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">0</button>
+                      <button type="button" onClick={calcInputDot} className="py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors">.</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {/* 護理人員薪資歷史記錄提示 */}
