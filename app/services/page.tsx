@@ -29,6 +29,7 @@ import {
   PROJECT_MANAGER_OPTIONS,
   INTRODUCER_OPTIONS
 } from '../../types/billing-salary'
+import { CUSTOMER_TYPE_OPTIONS } from '../../types/customer-management'
 import {
   getBusinessKPI,
   getProjectCategorySummary,
@@ -6404,7 +6405,7 @@ function ScheduleFormModal({
     customer_name: string
     phone: string
     service_address: string
-    project_category: string
+    customer_type: string
     hasLastMonthService: boolean
     hasCurrentMonthSchedule: boolean
   }[]>([])
@@ -6425,10 +6426,10 @@ function ScheduleFormModal({
       const lastMonthStart = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`
       const lastMonthEnd = `${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-31`
 
-      // 查詢客戶資料
+      // 查詢客戶資料（包含 customer_type）
       let customerQuery = supabase
         .from('customer_personal_data')
-        .select('customer_id, customer_name, phone, service_address')
+        .select('customer_id, customer_name, phone, service_address, customer_type')
 
       const { data: customers, error: customerError } = await customerQuery
 
@@ -6453,8 +6454,8 @@ function ScheduleFormModal({
         .lte('service_date', currentMonthEnd)
 
       // 定義記錄類型
-      type BillingRecord = { customer_id: string | null; customer_name: string | null; project_category: string | null }
-      type CustomerRecord = { customer_id: string; customer_name: string; phone: string | null; service_address: string | null }
+      type BillingRecord = { customer_id: string | null; customer_name: string | null }
+      type CustomerRecord = { customer_id: string; customer_name: string; phone: string | null; service_address: string | null; customer_type: string | null }
 
       // 建立上月服務客戶 Set
       const lastMonthCustomers = new Set(
@@ -6466,28 +6467,23 @@ function ScheduleFormModal({
         ((currentMonthRecords || []) as BillingRecord[]).map(r => r.customer_id || r.customer_name)
       )
 
-      // 建立客戶類別 Map
-      const customerCategoryMap = new Map<string, string>()
-      ;([...(lastMonthRecords || []), ...(currentMonthRecords || [])] as BillingRecord[]).forEach(r => {
-        if (r.customer_id && r.project_category) {
-          customerCategoryMap.set(r.customer_id, r.project_category)
-        }
-      })
+      // 組合客戶列表（排除家訪客戶）
+      // 組合客戶列表（排除家訪客戶）
+      let result = ((customers || []) as CustomerRecord[])
+        .filter(c => c.customer_type !== '家訪客戶') // 排除家訪客戶
+        .map(c => ({
+          customer_id: c.customer_id,
+          customer_name: c.customer_name,
+          phone: c.phone || '',
+          service_address: c.service_address || '',
+          customer_type: c.customer_type || '',
+          hasLastMonthService: lastMonthCustomers.has(c.customer_id) || lastMonthCustomers.has(c.customer_name),
+          hasCurrentMonthSchedule: currentMonthCustomers.has(c.customer_id) || currentMonthCustomers.has(c.customer_name)
+        }))
 
-      // 組合客戶列表
-      let result = ((customers || []) as CustomerRecord[]).map(c => ({
-        customer_id: c.customer_id,
-        customer_name: c.customer_name,
-        phone: c.phone || '',
-        service_address: c.service_address || '',
-        project_category: customerCategoryMap.get(c.customer_id) || '',
-        hasLastMonthService: lastMonthCustomers.has(c.customer_id) || lastMonthCustomers.has(c.customer_name),
-        hasCurrentMonthSchedule: currentMonthCustomers.has(c.customer_id) || currentMonthCustomers.has(c.customer_name)
-      }))
-
-      // 篩選類別
+      // 篩選客戶類型
       if (pickerCategory) {
-        result = result.filter(c => c.project_category === pickerCategory)
+        result = result.filter(c => c.customer_type === pickerCategory)
       }
 
       // 只顯示上月有服務的
@@ -7111,15 +7107,15 @@ function ScheduleFormModal({
                                   className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
                                 />
 
-                                {/* 客戶類別 */}
+                                {/* 客戶類型 */}
                                 <select
                                   value={pickerCategory}
                                   onChange={e => setPickerCategory(e.target.value)}
                                   className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
                                 >
-                                  <option value="">全部類別</option>
-                                  {PROJECT_CATEGORY_OPTIONS.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  <option value="">全部類型</option>
+                                  {CUSTOMER_TYPE_OPTIONS.filter(opt => opt !== '家訪客戶').map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
                                   ))}
                                 </select>
 
