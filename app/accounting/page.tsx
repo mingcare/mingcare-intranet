@@ -67,6 +67,7 @@ export default function AccountingPage() {
   const [isCreating, setIsCreating] = useState(false)  // 標記是新增還是編輯
   const [billingYear, setBillingYear] = useState<number>(new Date().getFullYear())
   const [billingMonthNum, setBillingMonthNum] = useState<number>(new Date().getMonth() + 1)
+  const [transactionType, setTransactionType] = useState<'income' | 'expense' | null>(null)  // 收入或支出類型
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<FinancialTransaction | null>(null)
   const [currentUser, setCurrentUser] = useState<string>('')
@@ -497,6 +498,15 @@ export default function AccountingPage() {
       setBillingMonthNum(new Date().getMonth() + 1)
     }
     
+    // 根據現有數據設定交易類型
+    if (txn.income_amount && txn.income_amount > 0) {
+      setTransactionType('income')
+    } else if (txn.expense_amount && txn.expense_amount > 0) {
+      setTransactionType('expense')
+    } else {
+      setTransactionType(null)
+    }
+    
     setShowEditModal(true)
   }
 
@@ -526,6 +536,7 @@ export default function AccountingPage() {
     
     setBillingYear(currentYear)
     setBillingMonthNum(currentMonth)
+    setTransactionType(null)  // 重置交易類型
     
     setEditingTransaction({
       id: '',
@@ -565,8 +576,16 @@ export default function AccountingPage() {
       alert('請選擇付款方式')
       return
     }
-    if (editingTransaction.income_amount === 0 && editingTransaction.expense_amount === 0) {
-      alert('請輸入收入或支出金額')
+    if (!transactionType) {
+      alert('請選擇交易類型（收入或支出）')
+      return
+    }
+    if (transactionType === 'income' && (!editingTransaction.income_category || editingTransaction.income_amount === 0)) {
+      alert('請選擇收入類別並輸入收入金額')
+      return
+    }
+    if (transactionType === 'expense' && (!editingTransaction.expense_category || editingTransaction.expense_amount === 0)) {
+      alert('請選擇支出類別並輸入支出金額')
       return
     }
     
@@ -1426,57 +1445,116 @@ export default function AccountingPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">收入類別</label>
-                  <select
-                    value={editingTransaction.income_category || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_category: e.target.value || null })}
-                    className="input-apple w-full"
+              {/* 交易類型選擇 */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-medium text-text-secondary mb-2">💰 交易類型 <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransactionType('income')
+                      setEditingTransaction({
+                        ...editingTransaction,
+                        expense_category: null,
+                        expense_amount: 0
+                      })
+                    }}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      transactionType === 'income'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-700'
+                    }`}
                   >
-                    <option value="">請選擇</option>
-                    {incomeCategories.map(cat => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">收入金額</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingTransaction.income_amount || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, income_amount: parseFloat(e.target.value) || 0 })}
-                    className="input-apple w-full"
-                  />
+                    <span className="text-lg">📈</span>
+                    <span className="ml-2 font-medium">收入</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransactionType('expense')
+                      setEditingTransaction({
+                        ...editingTransaction,
+                        income_category: null,
+                        income_amount: 0
+                      })
+                    }}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      transactionType === 'expense'
+                        ? 'border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700'
+                    }`}
+                  >
+                    <span className="text-lg">📉</span>
+                    <span className="ml-2 font-medium">支出</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">支出類別</label>
-                  <select
-                    value={editingTransaction.expense_category || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_category: e.target.value || null })}
-                    className="input-apple w-full"
-                  >
-                    <option value="">請選擇</option>
-                    {expenseCategories.map(cat => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
-                    ))}
-                  </select>
+              {/* 收入類別和金額（僅當選擇收入時顯示） */}
+              {transactionType === 'income' && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 dark:text-green-300 mb-1">收入類別 <span className="text-red-500">*</span></label>
+                      <select
+                        value={editingTransaction.income_category || ''}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, income_category: e.target.value || null })}
+                        className="input-apple w-full"
+                      >
+                        <option value="">請選擇</option>
+                        {incomeCategories.map(cat => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 dark:text-green-300 mb-1">收入金額 <span className="text-red-500">*</span></label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editingTransaction.income_amount || ''}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, income_amount: parseFloat(e.target.value) || 0 })}
+                        className="input-apple w-full"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">支出金額</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingTransaction.expense_amount || ''}
-                    onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_amount: parseFloat(e.target.value) || 0 })}
-                    className="input-apple w-full"
-                  />
+              )}
+
+              {/* 支出類別和金額（僅當選擇支出時顯示） */}
+              {transactionType === 'expense' && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-red-700 dark:text-red-300 mb-1">支出類別 <span className="text-red-500">*</span></label>
+                      <select
+                        value={editingTransaction.expense_category || ''}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_category: e.target.value || null })}
+                        className="input-apple w-full"
+                      >
+                        <option value="">請選擇</option>
+                        {expenseCategories.map(cat => (
+                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-red-700 dark:text-red-300 mb-1">支出金額 <span className="text-red-500">*</span></label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editingTransaction.expense_amount || ''}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, expense_amount: parseFloat(e.target.value) || 0 })}
+                        className="input-apple w-full"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
