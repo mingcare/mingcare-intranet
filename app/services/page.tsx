@@ -6454,6 +6454,7 @@ function ScheduleFormModal({
 
       // 定義記錄類型
       type BillingRecord = { customer_id: string | null; customer_name: string | null; project_category: string | null }
+      type CustomerRecord = { customer_id: string; customer_name: string; phone: string | null; service_address: string | null }
 
       // 建立上月服務客戶 Set
       const lastMonthCustomers = new Set(
@@ -6474,7 +6475,7 @@ function ScheduleFormModal({
       })
 
       // 組合客戶列表
-      let result = (customers || []).map(c => ({
+      let result = ((customers || []) as CustomerRecord[]).map(c => ({
         customer_id: c.customer_id,
         customer_name: c.customer_name,
         phone: c.phone || '',
