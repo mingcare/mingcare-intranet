@@ -483,6 +483,20 @@ export default function AccountingPage() {
   const openEditModal = (txn: FinancialTransaction) => {
     setEditingTransaction({ ...txn })
     setIsCreating(false)
+    
+    // 從現有的 billing_month 解析年份和月份
+    if (txn.billing_month) {
+      const match = txn.billing_month.match(/(\d{4})年(\d{1,2})月/)
+      if (match) {
+        setBillingYear(parseInt(match[1]))
+        setBillingMonthNum(parseInt(match[2]))
+      }
+    } else {
+      // 如果沒有 billing_month，使用當前年月
+      setBillingYear(new Date().getFullYear())
+      setBillingMonthNum(new Date().getMonth() + 1)
+    }
+    
     setShowEditModal(true)
   }
 
@@ -630,6 +644,10 @@ export default function AccountingPage() {
     const oldValues: Record<string, any> = {}
     const newValues: Record<string, any> = {}
     
+    // 計算新的 billing_month 和 fiscal_year
+    const newBillingMonth = `${billingYear}年${billingMonthNum}月`
+    const newFiscalYear = billingYear
+    
     const fieldsToCheck = [
       'transaction_date', 'transaction_item', 'payment_method',
       'income_category', 'income_amount', 'expense_category', 'expense_amount',
@@ -645,6 +663,20 @@ export default function AccountingPage() {
         newValues[field] = newVal
       }
     })
+    
+    // 檢查 billing_month 是否有變更
+    if (originalTxn.billing_month !== newBillingMonth) {
+      changedFields.push('billing_month')
+      oldValues['billing_month'] = originalTxn.billing_month
+      newValues['billing_month'] = newBillingMonth
+    }
+    
+    // 檢查 fiscal_year 是否有變更
+    if (originalTxn.fiscal_year !== newFiscalYear) {
+      changedFields.push('fiscal_year')
+      oldValues['fiscal_year'] = originalTxn.fiscal_year
+      newValues['fiscal_year'] = newFiscalYear
+    }
 
     if (changedFields.length === 0) {
       setShowEditModal(false)
@@ -666,6 +698,8 @@ export default function AccountingPage() {
         handler: editingTransaction.handler,
         notes: editingTransaction.notes,
         deduct_from_petty_cash: editingTransaction.deduct_from_petty_cash,
+        billing_month: newBillingMonth,
+        fiscal_year: newFiscalYear,
         updated_by: currentUser
       })
       .eq('id', editingTransaction.id)
@@ -1318,14 +1352,39 @@ export default function AccountingPage() {
                 </div>
               )}
               
-              {/* 編輯時顯示當前所屬月份（唯讀） */}
-              {!isCreating && editingTransaction.billing_month && (
-                <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-text-secondary">📅 所屬帳單月份</label>
-                    <span className="text-xs text-text-tertiary bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">🔒 不可更改</span>
+              {/* 編輯時顯示所屬月份選擇 */}
+              {!isCreating && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+                  <label className="block text-sm font-medium text-amber-700 dark:text-amber-300 mb-2">📅 所屬帳單月份</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">年份</label>
+                      <select
+                        value={billingYear}
+                        onChange={(e) => setBillingYear(Number(e.target.value))}
+                        className="input-apple w-full"
+                      >
+                        {availableYears.map(year => (
+                          <option key={year} value={year}>{year}年</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">月份</label>
+                      <select
+                        value={billingMonthNum}
+                        onChange={(e) => setBillingMonthNum(Number(e.target.value))}
+                        className="input-apple w-full"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                          <option key={month} value={month}>{month}月</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <p className="text-text-primary font-medium mt-1">{editingTransaction.billing_month}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    更改後帳單月份：{billingYear}年{billingMonthNum}月
+                  </p>
                 </div>
               )}
 
