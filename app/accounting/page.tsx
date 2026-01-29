@@ -1324,16 +1324,17 @@ export default function AccountingPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-tertiary mb-1">交易日期</label>
+                  <label className="block text-xs font-medium text-text-tertiary mb-1">交易日期 <span className="text-red-500">*</span></label>
                   <input
                     type="date"
                     value={editingTransaction.transaction_date}
                     onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_date: e.target.value })}
                     className="input-apple w-full text-sm"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-tertiary mb-1">帳單月份</label>
+                  <label className="block text-xs font-medium text-text-tertiary mb-1">帳單月份 <span className="text-red-500">*</span></label>
                   <div className="flex gap-1">
                     <select
                       value={billingYear}
