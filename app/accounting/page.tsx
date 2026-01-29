@@ -759,8 +759,13 @@ export default function AccountingPage() {
     // 建立要提交的交易清單（從現有 pendingTransactions 開始）
     let allTransactions = [...pendingTransactions]
     
-    // 如果當前表單有填寫內容，先加入到提交清單
-    if (editingTransaction && editingTransaction.transaction_item.trim()) {
+    // 檢查當前表單是否有實質內容（不只是自動填入的流水號和日期）
+    const hasSubstantialContent = editingTransaction && 
+      editingTransaction.transaction_item.trim() && 
+      (transactionType || editingTransaction.payment_method)
+    
+    // 如果當前表單有填寫實質內容，先加入到提交清單
+    if (hasSubstantialContent) {
       if (!validateCurrentForm()) return
       
       // 直接構建新項目並加入（不依賴 state 更新）
@@ -775,6 +780,7 @@ export default function AccountingPage() {
       allTransactions = [...allTransactions, newItem]
     }
     
+    // 如果清單有項目，直接提交（不需要檢查當前空白表單）
     if (allTransactions.length === 0) {
       alert('請至少新增一筆帳目')
       return

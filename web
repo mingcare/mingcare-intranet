@@ -1,0 +1,2057 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>護理人員申請表 | Nurse Application Form</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        :root {
+            --brand: #6366f1;
+            --brand-2: #4f46e5;
+            --brand-3: #818cf8;
+            --brand-light: rgba(99, 102, 241, 0.1);
+            --accent: #f59e0b;
+            --accent-2: #d97706;
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text: #1e293b;
+            --muted: #475569;
+            --muted-2: #64748b;
+            --surface: #ffffff;
+            --surface-2: #f8fafc;
+            --surface-3: #f1f5f9;
+            --focus: rgba(99, 102, 241, 0.15);
+            --success: #10b981;
+            --success-bg: #ecfdf5;
+            --success-border: #a7f3d0;
+            --error: #ef4444;
+            --error-bg: #fef2f2;
+            --warning: #f59e0b;
+            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-2: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            --gradient-3: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        body {
+            font-family: 'Noto Sans TC', 'Arial', sans-serif;
+            background: transparent;
+            color: var(--text);
+            min-height: auto;
+            padding: 0;
+            margin: 0;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--surface);
+            min-height: auto;
+            overflow: hidden;
+        }
+
+        @media (min-width: 769px) {
+            .container {
+                width: 100%;
+                max-width: 800px;
+                border: none;
+                min-height: auto;
+                margin: 0 auto;
+                border-radius: 0;
+                overflow: hidden;
+                box-shadow: none;
+            }
+        }
+
+        .header {
+            background: var(--gradient-2);
+            color: white;
+            padding: 32px 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            animation: headerShimmer 15s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes headerShimmer {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            position: relative;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header p {
+            font-size: 0.85rem;
+            opacity: 0.95;
+            position: relative;
+        }
+
+        .header a {
+            color: #fde68a;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .header a:hover {
+            color: #fef3c7;
+            text-decoration: underline;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            padding: 24px 20px;
+            background: linear-gradient(to bottom, var(--surface-2), var(--surface));
+            border-bottom: 1px solid var(--border);
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--border);
+            transform: translateY(-50%);
+            z-index: 0;
+            border-radius: 2px;
+        }
+
+        .progress-line-fill {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            height: 4px;
+            background: var(--gradient-2);
+            transform: translateY(-50%);
+            z-index: 1;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 2px;
+        }
+
+        .step-indicator {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--surface);
+            border: 3px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--muted-2);
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .step-indicator.active {
+            border-color: var(--brand);
+            color: var(--brand);
+            background: var(--surface);
+            box-shadow: 0 0 0 6px var(--focus), var(--shadow);
+            transform: scale(1.1);
+        }
+
+        .step-indicator.completed {
+            border-color: var(--success);
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+        }
+
+        .step-indicator.completed::after {
+            content: '✓';
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .step-indicator.completed span {
+            display: none;
+        }
+
+        .step-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 14px;
+            max-width: 540px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .step-label {
+            font-size: 0.72rem;
+            color: var(--muted-2);
+            text-align: center;
+            width: 70px;
+            transition: all 0.3s;
+        }
+
+        .step-label.active {
+            color: var(--brand);
+            font-weight: 700;
+        }
+
+        /* Form Container */
+        .form-container {
+            padding: 24px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Step Content */
+        .step-content {
+            display: none;
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .step-title {
+            font-size: 1.3rem;
+            color: var(--brand);
+            margin-bottom: 24px;
+            padding-bottom: 14px;
+            border-bottom: 3px solid;
+            border-image: var(--gradient-2) 1;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .form-row.two-columns {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        @media (max-width: 768px) {
+            .form-row.two-columns {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-container {
+                padding: 16px;
+            }
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .required {
+            color: var(--error);
+            font-weight: 700;
+        }
+
+        input, select, textarea {
+            padding: 14px 16px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--surface);
+            font-family: inherit;
+            color: var(--text);
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        input:hover, select:hover, textarea:hover {
+            border-color: var(--border-strong);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--brand);
+            box-shadow: 0 0 0 4px var(--focus), var(--shadow);
+        }
+
+        input.error, select.error {
+            border-color: var(--error);
+            background: var(--error-bg);
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        input::placeholder {
+            color: var(--muted-2);
+        }
+
+        /* Custom Multi-Select */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .select-button {
+            width: 100%;
+            max-width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1rem;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .select-button span:first-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .select-button:hover {
+            border-color: var(--border-strong);
+            background: var(--surface-2);
+        }
+
+        .select-button.active {
+            border-color: var(--brand);
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 0 0 4px var(--focus);
+        }
+
+        .select-arrow {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.75rem;
+            color: var(--muted-2);
+        }
+
+        .select-button.active .select-arrow {
+            transform: rotate(180deg);
+            color: var(--brand);
+        }
+
+        .dropdown-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 2px solid var(--brand);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .dropdown-options.show {
+            display: block;
+            animation: dropdownSlide 0.2s ease;
+        }
+
+        @keyframes dropdownSlide {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .dropdown-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            transition: all 0.15s;
+        }
+
+        .dropdown-option:hover {
+            background: var(--brand-light);
+        }
+
+        .dropdown-option:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-option input[type="checkbox"] {
+            margin-right: 12px;
+            width: 20px;
+            height: 20px;
+            accent-color: var(--brand);
+            cursor: pointer;
+        }
+
+        .dropdown-option.selected {
+            background: linear-gradient(90deg, var(--brand-light), transparent);
+            border-left: 3px solid var(--brand);
+        }
+
+        .dropdown-option label {
+            cursor: pointer;
+            flex: 1;
+            font-weight: 400;
+            margin-bottom: 0;
+        }
+
+        /* File Upload */
+        .file-upload {
+            border: 2px dashed var(--border-strong);
+            border-radius: 16px;
+            padding: 28px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface) 100%);
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .file-upload p {
+            color: var(--muted-2);
+            font-size: 0.9rem;
+            margin: 0;
+            transition: all 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 10px;
+        }
+
+        .file-upload::before {
+            content: '📁';
+            display: block;
+            font-size: 2rem;
+            margin-bottom: 8px;
+            opacity: 0.6;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: var(--brand);
+            background: linear-gradient(135deg, var(--brand-light) 0%, var(--surface) 100%);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .file-upload:hover::before {
+            transform: scale(1.1);
+            opacity: 0.8;
+        }
+
+        .file-upload.has-file {
+            border-color: var(--success);
+            border-style: solid;
+            background: linear-gradient(135deg, var(--success-bg) 0%, #d1fae5 100%);
+        }
+
+        .file-upload.has-file::before {
+            content: '✅';
+        }
+
+        .file-upload.has-file p {
+            color: #059669;
+            font-weight: 600;
+        }
+
+        .file-remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            box-shadow: var(--shadow);
+            transition: all 0.2s;
+        }
+
+        .file-remove-btn:hover {
+            transform: scale(1.1);
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+
+        .file-upload.has-file .file-remove-btn {
+            display: flex;
+        }
+
+        /* Navigation Buttons */
+        .nav-buttons {
+            display: flex;
+            gap: 14px;
+            margin-top: 36px;
+            padding-top: 24px;
+            border-top: 2px solid var(--border);
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-prev {
+            background: var(--surface);
+            color: var(--muted);
+            border: 2px solid var(--border-strong);
+            flex: 1;
+        }
+
+        .btn-prev:hover {
+            background: var(--surface-3);
+            border-color: var(--brand);
+            color: var(--brand);
+            transform: translateX(-2px);
+        }
+
+        .btn-next {
+            background: var(--gradient-2);
+            color: white;
+            flex: 2;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-next:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-next:active {
+            transform: translateY(0);
+        }
+
+        .btn-next:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #10b981, #059669, #047857);
+            background-size: 200% 200%;
+            animation: gradientShift 3s ease infinite;
+            color: white;
+            flex: 2;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+        }
+
+        /* Review Page */
+        .review-section {
+            background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface-3) 100%);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 18px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s;
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .review-section:hover {
+            box-shadow: var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .review-section-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--brand);
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .review-item {
+            display: flex;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .review-item:hover {
+            background: rgba(99, 102, 241, 0.03);
+            border-radius: 8px;
+            padding-left: 8px;
+            margin-left: -8px;
+        }
+
+        .review-item:last-child {
+            border-bottom: none;
+        }
+
+        .review-label {
+            font-size: 0.85rem;
+            color: var(--muted);
+            width: 40%;
+            flex-shrink: 0;
+            font-weight: 500;
+            min-width: 0;
+        }
+
+        .review-value {
+            font-size: 0.9rem;
+            color: var(--text);
+            font-weight: 600;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .review-value.empty {
+            color: var(--muted-2);
+            font-style: italic;
+            font-weight: 400;
+        }
+
+        .review-files {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding-top: 8px;
+        }
+
+        .review-file-badge {
+            background: linear-gradient(135deg, var(--success-bg), #d1fae5);
+            color: #059669;
+            padding: 6px 14px;
+            border-radius: 24px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid var(--success-border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .review-file-badge.missing {
+            background: linear-gradient(135deg, var(--error-bg), #fecaca);
+            color: var(--error);
+            border-color: #fca5a5;
+        }
+
+        /* Privacy Box */
+        .privacy-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 18px;
+            border: 1px solid #fcd34d;
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: var(--shadow-sm);
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .privacy-box h3 {
+            font-size: 1rem;
+            margin-bottom: 12px;
+            color: #92400e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .privacy-box h4 {
+            font-size: 0.88rem;
+            margin-top: 12px;
+            margin-bottom: 6px;
+            color: #92400e;
+        }
+
+        .privacy-box p {
+            font-size: 0.82rem;
+            color: #78350f;
+            margin-bottom: 6px;
+            line-height: 1.6;
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 20px;
+            border-radius: 14px;
+            margin: 24px 0;
+            text-align: center;
+        }
+
+        .status-success {
+            background: linear-gradient(135deg, var(--success-bg) 0%, #d1fae5 100%);
+            border: 2px solid var(--success);
+            color: #065f46;
+            box-shadow: var(--shadow);
+        }
+
+        .status-success strong {
+            color: var(--success);
+            font-size: 1.1em;
+        }
+
+        .status-error {
+            background: linear-gradient(135deg, var(--error-bg) 0%, #fecaca 100%);
+            border: 2px solid var(--error);
+            color: #991b1b;
+            box-shadow: var(--shadow);
+        }
+
+        .status-info {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            border: 2px solid #0ea5e9;
+            color: #0369a1;
+            padding: 16px 20px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 500;
+            box-shadow: var(--shadow);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Edit Button in Review */
+        .edit-btn {
+            background: linear-gradient(135deg, var(--brand-light), transparent);
+            border: 1px solid var(--brand);
+            color: var(--brand);
+            font-size: 0.82rem;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            margin-left: auto;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .edit-btn:hover {
+            background: var(--brand);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--surface-2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(var(--brand-3), var(--brand));
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--brand-2);
+        }
+
+        /* Hostinger compatibility fix */
+        #nurseApplicationForm {
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .step-content {
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .form-group {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 護理人員申請表格</h1>
+            <p>
+                <a href="https://www.mingcarehome.com/caregiver-terms-and-condition" target="_blank">
+                    查看醫療護理人員獨立承辦商合約及上班守則
+                </a>
+            </p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-steps">
+                <div class="progress-line"></div>
+                <div class="progress-line-fill" id="progress-fill"></div>
+                <div class="step-indicator active" data-step="1"><span>1</span></div>
+                <div class="step-indicator" data-step="2"><span>2</span></div>
+                <div class="step-indicator" data-step="3"><span>3</span></div>
+                <div class="step-indicator" data-step="4"><span>4</span></div>
+                <div class="step-indicator" data-step="5"><span>5</span></div>
+            </div>
+            <div class="step-labels">
+                <span class="step-label active">個人資料</span>
+                <span class="step-label">專業資料</span>
+                <span class="step-label">工作經驗</span>
+                <span class="step-label">文件上傳</span>
+                <span class="step-label">確認提交</span>
+            </div>
+        </div>
+
+        <div class="form-container">
+            <form id="nurseApplicationForm">
+                
+                <!-- Step 1: Personal Information -->
+                <div class="step-content active" data-step="1">
+                    <h2 class="step-title">👤 步驟 1：個人資料</h2>
+                    
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>中文姓名 <span class="required">*</span></label>
+                            <input type="text" id="name_chinese" name="name_chinese" required placeholder="請輸入中文姓名">
+                        </div>
+                        <div class="form-group">
+                            <label>英文姓名 <span class="required">*</span></label>
+                            <input type="text" id="name_english" name="name_english" required placeholder="請輸入英文姓名">
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>電話號碼 <span class="required">*</span></label>
+                            <input type="tel" id="phone" name="phone" required placeholder="例：91234567">
+                        </div>
+                        <div class="form-group">
+                            <label>電郵地址</label>
+                            <input type="email" id="email" name="email" placeholder="例：example@email.com">
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>香港身份證號碼 <span class="required">*</span></label>
+                            <input type="text" id="hkid" name="hkid" required placeholder="例：A123456(7)">
+                        </div>
+                        <div class="form-group">
+                            <label>出生日期 <span class="required">*</span></label>
+                            <input type="date" id="dob" name="dob" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>性別 <span class="required">*</span></label>
+                            <select id="gender" name="gender" required>
+                                <option value="">請選擇</option>
+                                <option value="男">男</option>
+                                <option value="女">女</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>國籍 <span class="required">*</span></label>
+                            <input type="text" id="nationality" name="nationality" required placeholder="例：中國香港">
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>首選工作地區</label>
+                            <select id="preferred_area" name="preferred_area">
+                                <option value="">請選擇</option>
+                                <option value="所有區域">所有區域</option>
+                                <option value="灣仔區">灣仔區</option>
+                                <option value="中西區">中西區</option>
+                                <option value="東區">東區</option>
+                                <option value="南區">南區</option>
+                                <option value="油尖旺區">油尖旺區</option>
+                                <option value="深水埗區">深水埗區</option>
+                                <option value="九龍城區">九龍城區</option>
+                                <option value="黃大仙區">黃大仙區</option>
+                                <option value="觀塘區">觀塘區</option>
+                                <option value="西貢區">西貢區</option>
+                                <option value="沙田區">沙田區</option>
+                                <option value="大埔區">大埔區</option>
+                                <option value="北區">北區</option>
+                                <option value="荃灣區">荃灣區</option>
+                                <option value="屯門區">屯門區</option>
+                                <option value="元朗區">元朗區</option>
+                                <option value="葵青區">葵青區</option>
+                                <option value="離島區">離島區</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>緊急聯絡人姓名 <span class="required">*</span></label>
+                            <input type="text" id="emergency_contact" name="emergency_contact" required placeholder="請輸入緊急聯絡人姓名">
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>緊急聯絡人電話 <span class="required">*</span></label>
+                            <input type="tel" id="emergency_contact_phone" name="emergency_contact_phone" required placeholder="例：91234567">
+                        </div>
+                        <div class="form-group">
+                            <label>住址 <span class="required">*</span></label>
+                            <input type="text" id="address" name="address" required placeholder="請輸入住址">
+                        </div>
+                    </div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="btn btn-next" onclick="nextStep()">
+                            下一步 →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Professional Information -->
+                <div class="step-content" data-step="2">
+                    <h2 class="step-title">💼 步驟 2：專業資料</h2>
+                    
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label>語言能力 <span class="required">*</span> (可選擇多項)</label>
+                        <div class="custom-select" id="language-select">
+                            <div class="select-button" data-dropdown="language">
+                                <span id="language-selected">請選擇語言能力</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="dropdown-options" id="language-dropdown">
+                                <div class="dropdown-option"><input type="checkbox" id="lang-1" value="廣東話"><label for="lang-1">廣東話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-2" value="英文"><label for="lang-2">英文</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-3" value="普通話"><label for="lang-3">普通話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-4" value="福建話"><label for="lang-4">福建話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-5" value="潮州話"><label for="lang-5">潮州話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-6" value="客家話"><label for="lang-6">客家話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-7" value="上海話"><label for="lang-7">上海話</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="lang-8" value="四邑話"><label for="lang-8">四邑話</label></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label>申請職位 <span class="required">*</span> (可選擇多項)</label>
+                        <div class="custom-select" id="job-select">
+                            <div class="select-button" data-dropdown="job_position">
+                                <span id="job_position-selected">請選擇職位</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="dropdown-options" id="job_position-dropdown">
+                                <div class="dropdown-option"><input type="checkbox" id="job-1" value="陪診員 (Medical Escort)"><label for="job-1">陪診員 (Medical Escort)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-2" value="居家照顧員(PCW)"><label for="job-2">居家照顧員(PCW)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-3" value="家務助理(Housekeeper)"><label for="job-3">家務助理(Housekeeper)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-4" value="醫護支援人員(CRSW)"><label for="job-4">醫護支援人員(CRSW)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-5" value="保健員(HCW)"><label for="job-5">保健員(HCW)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-6" value="登記護士(EN)"><label for="job-6">登記護士(EN)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-7" value="註冊護士(RN)"><label for="job-7">註冊護士(RN)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-8" value="護士學生"><label for="job-8">護士學生</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-9" value="中國護士"><label for="job-9">中國護士</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-10" value="註冊營養師(Dietitian)"><label for="job-10">註冊營養師(Dietitian)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-11" value="職業治療師(OT)"><label for="job-11">職業治療師(OT)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-12" value="言語治療師(ST)"><label for="job-12">言語治療師(ST)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-13" value="物理治療師(PT)"><label for="job-13">物理治療師(PT)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-14" value="醫生(Doctor)"><label for="job-14">醫生(Doctor)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-15" value="抽血員(Phlebotomist)"><label for="job-15">抽血員(Phlebotomist)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-16" value="物理治療助理 (PTA)"><label for="job-16">物理治療助理 (PTA)</label></div>
+                                <div class="dropdown-option"><input type="checkbox" id="job-17" value="職業治療助理 (OTA)"><label for="job-17">職業治療助理 (OTA)</label></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>工作經驗年數</label>
+                            <input type="text" id="experience_years" name="experience_years" placeholder="例：3年">
+                        </div>
+                        <div class="form-group">
+                            <label>新冠疫苗接種狀況</label>
+                            <select id="covid_vaccine" name="covid_vaccine">
+                                <option value="">請選擇</option>
+                                <option value="無接種">未接種</option>
+                                <option value="1針">已接種1針</option>
+                                <option value="2針">已接種2針</option>
+                                <option value="3針">已接種3針</option>
+                                <option value="4針">已接種4針</option>
+                                <option value="Other">其他</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>推薦人姓名</label>
+                            <input type="text" id="referrer" name="referrer" placeholder="如有推薦人請填寫">
+                        </div>
+                        <div class="form-group">
+                            <label>推薦人電話</label>
+                            <input type="tel" id="referrer_phone" name="referrer_phone" placeholder="推薦人聯絡電話">
+                        </div>
+                    </div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="btn btn-prev" onclick="prevStep()">
+                            ← 上一步
+                        </button>
+                        <button type="button" class="btn btn-next" onclick="nextStep()">
+                            下一步 →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Work Experience -->
+                <div class="step-content" data-step="3">
+                    <h2 class="step-title">📋 步驟 3：工作經驗</h2>
+                    <p style="color: var(--muted); margin-bottom: 20px; font-size: 0.9rem;">如有相關工作經驗，請填寫以下資料（選填）</p>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>公司名稱</label>
+                            <input type="text" id="company_name" name="company_name" placeholder="前僱主公司名稱">
+                        </div>
+                        <div class="form-group">
+                            <label>職位</label>
+                            <input type="text" id="company_position" name="company_position" placeholder="擔任職位">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>工作期間</label>
+                            <input type="text" id="employment_period" name="employment_period" placeholder="例：2020年1月至2022年12月">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>主要職責</label>
+                            <textarea id="main_duties" name="main_duties" placeholder="請簡述您的主要工作職責"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="btn btn-prev" onclick="prevStep()">
+                            ← 上一步
+                        </button>
+                        <button type="button" class="btn btn-next" onclick="nextStep()">
+                            下一步 →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Document Upload -->
+                <div class="step-content" data-step="4">
+                    <h2 class="step-title">📄 步驟 4：文件上傳</h2>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>📷 個人照片（證件相或大頭照）<span class="required">*</span></label>
+                            <div class="file-upload" data-file-input="profile_photo">
+                                <button type="button" class="file-remove-btn" data-remove="profile_photo">×</button>
+                                <input type="file" id="profile_photo" name="profile_photo" accept=".jpg,.jpeg,.png" required>
+                                <p>點擊上傳證件相或大頭照 (JPG/PNG)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <label>香港身份證副本 <span class="required">*</span></label>
+                            <div class="file-upload" data-file-input="hkid_copy">
+                                <button type="button" class="file-remove-btn" data-remove="hkid_copy">×</button>
+                                <input type="file" id="hkid_copy" name="hkid_copy" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <p>點擊上傳身份證副本</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>證書一 <span class="required">*</span></label>
+                            <div class="file-upload" data-file-input="certificate_1">
+                                <button type="button" class="file-remove-btn" data-remove="certificate_1">×</button>
+                                <input type="file" id="certificate_1" name="certificate_1" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <p>點擊上傳證書一</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p style="color: var(--muted); margin: 16px 0 12px; font-size: 0.9rem;">其他專業證書（選填）</p>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <div class="file-upload" data-file-input="certificate_2">
+                                <button type="button" class="file-remove-btn" data-remove="certificate_2">×</button>
+                                <input type="file" id="certificate_2" name="certificate_2" accept=".pdf,.jpg,.jpeg,.png">
+                                <p>證書二</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="file-upload" data-file-input="certificate_3">
+                                <button type="button" class="file-remove-btn" data-remove="certificate_3">×</button>
+                                <input type="file" id="certificate_3" name="certificate_3" accept=".pdf,.jpg,.jpeg,.png">
+                                <p>證書三</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row two-columns">
+                        <div class="form-group">
+                            <div class="file-upload" data-file-input="certificate_4">
+                                <button type="button" class="file-remove-btn" data-remove="certificate_4">×</button>
+                                <input type="file" id="certificate_4" name="certificate_4" accept=".pdf,.jpg,.jpeg,.png">
+                                <p>證書四</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="file-upload" data-file-input="certificate_5">
+                                <button type="button" class="file-remove-btn" data-remove="certificate_5">×</button>
+                                <input type="file" id="certificate_5" name="certificate_5" accept=".pdf,.jpg,.jpeg,.png">
+                                <p>證書五</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>性罪行定罪紀錄查核文件（如有）</label>
+                            <div class="file-upload" data-file-input="scrc_status">
+                                <button type="button" class="file-remove-btn" data-remove="scrc_status">×</button>
+                                <input type="file" id="scrc_status" name="scrc_status" accept=".pdf,.jpg,.jpeg,.png">
+                                <p>點擊上傳 SCRC 文件</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="btn btn-prev" onclick="prevStep()">
+                            ← 上一步
+                        </button>
+                        <button type="button" class="btn btn-next" onclick="nextStep()">
+                            下一步 →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 5: Review & Submit -->
+                <div class="step-content" data-step="5">
+                    <h2 class="step-title">✅ 步驟 5：確認資料並提交</h2>
+                    <p style="color: var(--muted); margin-bottom: 20px; font-size: 0.9rem;">請仔細檢查以下資料，確認無誤後提交申請</p>
+
+                    <div id="review-content">
+                        <!-- Review content will be generated by JavaScript -->
+                    </div>
+
+                    <div class="privacy-box">
+                        <h3>📋 個人資料隱私條款</h3>
+                        <p><strong>明家居家護理服務有限公司</strong>尊重您的隱私權，並致力於保護您的個人資料。</p>
+                        <h4>個人資料的收集</h4>
+                        <p>我們會收集您提供的個人資料，包括姓名、聯繫方式、學歷背景、工作經驗等。</p>
+                        <h4>個人資料的使用</h4>
+                        <p>您的資料將用於招聘過程，包括申請表審核、面試安排、資格審查等。</p>
+                        <h4>個人資料的保護</h4>
+                        <p>本公司將採取適當的技術和組織措施，確保您的個人資料得到充分保護。</p>
+                        <p style="margin-top: 12px; font-weight: 600; color: var(--brand);">✓ 提交申請表即表示您已閱讀、理解並同意以上隱私條款。</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>同意條款 <span class="required">*</span></label>
+                        <select id="contract_status" name="contract_status" required>
+                            <option value="">請選擇</option>
+                            <option value="同意">✓ 我同意本公司護理人員職位條款及細則</option>
+                            <option value="不同意">✗ 不同意條款</option>
+                        </select>
+                    </div>
+
+                    <div id="status-message"></div>
+
+                    <div class="nav-buttons">
+                        <button type="button" class="btn btn-prev" onclick="prevStep()">
+                            ← 上一步
+                        </button>
+                        <button type="submit" class="btn btn-submit" id="submit-btn">
+                            📝 確認並提交申請
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Supabase config
+        const supabaseUrl = 'https://cvkxlvdicympakfecgvv.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2a3hsdmRpY3ltcGFrZmVjZ3Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0MjkxODEsImV4cCI6MjA2NzAwNTE4MX0.jp2fPKcBcG4-042UoN3OieR553WAgABhJIujiDJAt-I';
+
+        let supabaseClient = null;
+        let currentStep = 1;
+        const totalSteps = 5;
+
+        function getSupabaseClient() {
+            if (supabaseClient) return supabaseClient;
+            if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+                return null;
+            }
+            supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+                auth: { persistSession: false }
+            });
+            return supabaseClient;
+        }
+
+        // Step Navigation
+        function updateProgressBar() {
+            const progressFill = document.getElementById('progress-fill');
+            const percentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            progressFill.style.width = percentage + '%';
+
+            document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
+                const step = index + 1;
+                indicator.classList.remove('active', 'completed');
+                if (step < currentStep) {
+                    indicator.classList.add('completed');
+                } else if (step === currentStep) {
+                    indicator.classList.add('active');
+                }
+            });
+
+            document.querySelectorAll('.step-label').forEach((label, index) => {
+                label.classList.toggle('active', index + 1 === currentStep);
+            });
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelector(`.step-content[data-step="${step}"]`).classList.add('active');
+            currentStep = step;
+            updateProgressBar();
+            
+            // Scroll to top - multiple methods for Hostinger compatibility
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            
+            // Try to scroll the container
+            const container = document.querySelector('.container');
+            if (container) container.scrollTop = 0;
+            
+            // Try parent window for iframe embed
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.scrollTo(0, 0);
+                    window.parent.document.body.scrollTop = 0;
+                    window.parent.document.documentElement.scrollTop = 0;
+                }
+            } catch (e) {}
+
+            // Scroll to header element
+            const header = document.querySelector('.header');
+            if (header) {
+                header.scrollIntoView({ behavior: 'auto', block: 'start' });
+            }
+
+            if (step === 5) {
+                generateReviewContent();
+            }
+        }
+
+        function validateStep(step) {
+            let isValid = true;
+            let errorMessage = '';
+
+            if (step === 1) {
+                const requiredFields = [
+                    { id: 'name_chinese', label: '中文姓名' },
+                    { id: 'name_english', label: '英文姓名' },
+                    { id: 'phone', label: '電話號碼' },
+                    { id: 'hkid', label: '香港身份證號碼' },
+                    { id: 'dob', label: '出生日期' },
+                    { id: 'gender', label: '性別' },
+                    { id: 'nationality', label: '國籍' },
+                    { id: 'address', label: '住址' },
+                    { id: 'emergency_contact', label: '緊急聯絡人姓名' },
+                    { id: 'emergency_contact_phone', label: '緊急聯絡人電話' }
+                ];
+
+                for (const field of requiredFields) {
+                    const input = document.getElementById(field.id);
+                    if (!input.value.trim()) {
+                        isValid = false;
+                        errorMessage = `請填寫${field.label}`;
+                        input.classList.add('error');
+                        input.focus();
+                        break;
+                    } else {
+                        input.classList.remove('error');
+                    }
+                }
+            }
+
+            if (step === 2) {
+                const languages = getSelectedLanguages();
+                const jobPositions = getSelectedJobPositions();
+
+                if (languages.length === 0) {
+                    isValid = false;
+                    errorMessage = '請至少選擇一種語言能力';
+                } else if (jobPositions.length === 0) {
+                    isValid = false;
+                    errorMessage = '請至少選擇一個申請職位';
+                }
+            }
+
+            if (step === 4) {
+                const profilePhoto = document.getElementById('profile_photo').files[0];
+                const hkidCopy = document.getElementById('hkid_copy').files[0];
+                const cert1 = document.getElementById('certificate_1').files[0];
+
+                if (!profilePhoto) {
+                    isValid = false;
+                    errorMessage = '請上傳個人照片（證件相或大頭照）';
+                } else if (!hkidCopy) {
+                    isValid = false;
+                    errorMessage = '請上傳香港身份證副本';
+                } else if (!cert1) {
+                    isValid = false;
+                    errorMessage = '請上傳證書一';
+                }
+            }
+
+            if (!isValid) {
+                alert(errorMessage);
+            }
+
+            return isValid;
+        }
+
+        function nextStep() {
+            if (validateStep(currentStep)) {
+                if (currentStep < totalSteps) {
+                    showStep(currentStep + 1);
+                }
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                showStep(currentStep - 1);
+            }
+        }
+
+        function goToStep(step) {
+            showStep(step);
+        }
+
+        // Get selected values from multi-select
+        function getSelectedLanguages() {
+            return Array.from(document.querySelectorAll('#language-dropdown input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+        }
+
+        function getSelectedJobPositions() {
+            return Array.from(document.querySelectorAll('#job_position-dropdown input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+        }
+
+        // Generate Review Content
+        function generateReviewContent() {
+            const reviewContainer = document.getElementById('review-content');
+            
+            const getValue = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value.trim() : '';
+            };
+
+            const getFileStatus = (id) => {
+                const input = document.getElementById(id);
+                return input && input.files && input.files[0] ? input.files[0].name : null;
+            };
+
+            const languages = getSelectedLanguages();
+            const jobPositions = getSelectedJobPositions();
+
+            reviewContainer.innerHTML = `
+                <div class="review-section">
+                    <div class="review-section-title">
+                        👤 個人資料
+                        <button type="button" class="edit-btn" onclick="goToStep(1)">✏️ 修改</button>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">中文姓名</span>
+                        <span class="review-value">${getValue('name_chinese') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">英文姓名</span>
+                        <span class="review-value">${getValue('name_english') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">電話號碼</span>
+                        <span class="review-value">${getValue('phone') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">電郵地址</span>
+                        <span class="review-value">${getValue('email') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">身份證號碼</span>
+                        <span class="review-value">${getValue('hkid') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">出生日期</span>
+                        <span class="review-value">${getValue('dob') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">性別</span>
+                        <span class="review-value">${getValue('gender') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">國籍</span>
+                        <span class="review-value">${getValue('nationality') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">首選工作地區</span>
+                        <span class="review-value">${getValue('preferred_area') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">住址</span>
+                        <span class="review-value">${getValue('address') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">緊急聯絡人</span>
+                        <span class="review-value">${getValue('emergency_contact') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">緊急聯絡電話</span>
+                        <span class="review-value">${getValue('emergency_contact_phone') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                </div>
+
+                <div class="review-section">
+                    <div class="review-section-title">
+                        💼 專業資料
+                        <button type="button" class="edit-btn" onclick="goToStep(2)">✏️ 修改</button>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">語言能力</span>
+                        <span class="review-value">${languages.length > 0 ? languages.join('、') : '<span class="empty">未選擇</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">申請職位</span>
+                        <span class="review-value">${jobPositions.length > 0 ? jobPositions.join('、') : '<span class="empty">未選擇</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">工作經驗</span>
+                        <span class="review-value">${getValue('experience_years') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">疫苗接種</span>
+                        <span class="review-value">${getValue('covid_vaccine') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">推薦人</span>
+                        <span class="review-value">${getValue('referrer') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                </div>
+
+                <div class="review-section">
+                    <div class="review-section-title">
+                        📋 工作經驗
+                        <button type="button" class="edit-btn" onclick="goToStep(3)">✏️ 修改</button>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">公司名稱</span>
+                        <span class="review-value">${getValue('company_name') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">職位</span>
+                        <span class="review-value">${getValue('company_position') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">工作期間</span>
+                        <span class="review-value">${getValue('employment_period') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">主要職責</span>
+                        <span class="review-value">${getValue('main_duties') || '<span class="empty">未填寫</span>'}</span>
+                    </div>
+                </div>
+
+                <div class="review-section">
+                    <div class="review-section-title">
+                        📄 已上傳文件
+                        <button type="button" class="edit-btn" onclick="goToStep(4)">✏️ 修改</button>
+                    </div>
+                    <div class="review-files">
+                        ${getFileStatus('profile_photo') ? `<span class="review-file-badge">✓ 個人照片</span>` : `<span class="review-file-badge missing">✗ 個人照片</span>`}
+                        ${getFileStatus('hkid_copy') ? `<span class="review-file-badge">✓ 身份證副本</span>` : `<span class="review-file-badge missing">✗ 身份證副本</span>`}
+                        ${getFileStatus('certificate_1') ? `<span class="review-file-badge">✓ 證書一</span>` : `<span class="review-file-badge missing">✗ 證書一</span>`}
+                        ${getFileStatus('certificate_2') ? `<span class="review-file-badge">✓ 證書二</span>` : ''}
+                        ${getFileStatus('certificate_3') ? `<span class="review-file-badge">✓ 證書三</span>` : ''}
+                        ${getFileStatus('certificate_4') ? `<span class="review-file-badge">✓ 證書四</span>` : ''}
+                        ${getFileStatus('certificate_5') ? `<span class="review-file-badge">✓ 證書五</span>` : ''}
+                        ${getFileStatus('scrc_status') ? `<span class="review-file-badge">✓ SCRC文件</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Dropdown functionality
+        function toggleDropdown(type) {
+            const dropdown = document.getElementById(type + '-dropdown');
+            const button = dropdown.previousElementSibling;
+            
+            document.querySelectorAll('.dropdown-options').forEach(dd => {
+                if (dd.id !== type + '-dropdown') {
+                    dd.classList.remove('show');
+                    dd.previousElementSibling?.classList.remove('active');
+                }
+            });
+            
+            dropdown.classList.toggle('show');
+            button.classList.toggle('active');
+        }
+
+        function updateSelected(type) {
+            const dropdown = document.getElementById(type + '-dropdown');
+            const selectedSpan = document.getElementById(type + '-selected');
+            const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+            
+            const selected = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                selectedSpan.textContent = type === 'language' ? '請選擇語言能力' : '請選擇職位';
+            } else if (selected.length === 1) {
+                selectedSpan.textContent = selected[0];
+            } else {
+                selectedSpan.textContent = `已選擇 ${selected.length} 項`;
+            }
+            
+            checkboxes.forEach(cb => {
+                cb.closest('.dropdown-option').classList.toggle('selected', cb.checked);
+            });
+        }
+
+        // File upload handling
+        function getDefaultFileName(inputId) {
+            const names = {
+                'profile_photo': '點擊上傳證件相或大頭照 (JPG/PNG)',
+                'hkid_copy': '點擊上傳身份證副本',
+                'certificate_1': '點擊上傳證書一',
+                'certificate_2': '證書二',
+                'certificate_3': '證書三',
+                'certificate_4': '證書四',
+                'certificate_5': '證書五',
+                'scrc_status': '點擊上傳 SCRC 文件'
+            };
+            return names[inputId] || '點擊上傳文件';
+        }
+
+        function validateFile(file, fieldName) {
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                throw new Error(`${fieldName}檔案太大，請選擇小於10MB的檔案`);
+            }
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            if (!allowedTypes.includes(file.type)) {
+                throw new Error(`${fieldName}檔案格式不支援，請上傳 JPG、PNG 或 PDF 檔案`);
+            }
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // File inputs
+            document.querySelectorAll('input[type="file"]').forEach(input => {
+                input.addEventListener('change', function() {
+                    const uploadDiv = this.parentElement;
+                    const fileText = uploadDiv.querySelector('p');
+                    
+                    if (this.files[0]) {
+                        const fileName = this.files[0].name;
+                        const displayName = fileName.length > 25 ? fileName.substring(0, 25) + '...' : fileName;
+                        fileText.textContent = `✓ ${displayName}`;
+                        uploadDiv.classList.add('has-file');
+                    } else {
+                        fileText.textContent = getDefaultFileName(this.id);
+                        uploadDiv.classList.remove('has-file');
+                    }
+                });
+            });
+
+            // Checkbox changes
+            document.addEventListener('change', function(e) {
+                if (e.target.type === 'checkbox' && e.target.closest('.dropdown-options')) {
+                    const dropdown = e.target.closest('.dropdown-options');
+                    if (dropdown.id === 'language-dropdown') updateSelected('language');
+                    else if (dropdown.id === 'job_position-dropdown') updateSelected('job_position');
+                }
+            });
+
+            // Click handler
+            document.addEventListener('click', function(e) {
+                const target = e.target;
+
+                // File remove button
+                const removeBtn = target.closest('.file-remove-btn');
+                if (removeBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const inputId = removeBtn.getAttribute('data-remove');
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        input.value = '';
+                        const uploadDiv = input.parentElement;
+                        uploadDiv.querySelector('p').textContent = getDefaultFileName(inputId);
+                        uploadDiv.classList.remove('has-file');
+                    }
+                    return;
+                }
+
+                // Dropdown option
+                const optionRow = target.closest('.dropdown-option');
+                if (optionRow && optionRow.closest('.dropdown-options')) {
+                    const checkbox = optionRow.querySelector('input[type="checkbox"]');
+                    if (checkbox && target !== checkbox && !target.closest('label')) {
+                        checkbox.checked = !checkbox.checked;
+                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    return;
+                }
+
+                // Dropdown toggle
+                if (target.closest('.dropdown-options')) return;
+                const selectButton = target.closest('.select-button');
+                if (selectButton) {
+                    e.preventDefault();
+                    toggleDropdown(selectButton.getAttribute('data-dropdown'));
+                    return;
+                }
+
+                // Close dropdowns when clicking outside
+                if (!target.closest('.custom-select')) {
+                    document.querySelectorAll('.dropdown-options').forEach(d => {
+                        d.classList.remove('show');
+                        d.previousElementSibling?.classList.remove('active');
+                    });
+                }
+            }, true);
+        });
+
+        // Form submission
+        // Helper function to scroll to top
+        function scrollToTop() {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            const container = document.querySelector('.container');
+            if (container) container.scrollTop = 0;
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.scrollTo(0, 0);
+                    window.parent.document.body.scrollTop = 0;
+                    window.parent.document.documentElement.scrollTop = 0;
+                }
+            } catch (e) {}
+            const header = document.querySelector('.header');
+            if (header) header.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+
+        // Helper function to update status message
+        function updateStatus(message) {
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.innerHTML = `<div class="status-info">⏳ ${message}</div>`;
+        }
+
+        document.getElementById('nurseApplicationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submit-btn');
+            const statusMessage = document.getElementById('status-message');
+            
+            const contractStatus = document.getElementById('contract_status').value;
+            if (contractStatus !== '同意') {
+                alert('必須同意條款及細則才能提交申請');
+                return;
+            }
+
+            statusMessage.innerHTML = '';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading"></span> 提交中...';
+            
+            // Disable previous button during submission
+            const prevBtn = document.querySelector('.btn-prev');
+            if (prevBtn) prevBtn.disabled = true;
+            
+            try {
+                updateStatus('正在連接伺服器...');
+                
+                const supabase = getSupabaseClient();
+                if (!supabase) {
+                    throw new Error('無法連接到資料庫');
+                }
+
+                updateStatus('正在提交個人資料...');
+
+                const formData = new FormData(this);
+                const languages = getSelectedLanguages();
+                const jobPositions = getSelectedJobPositions();
+
+                const submissionData = {
+                    name_chinese: formData.get('name_chinese'),
+                    name_english: formData.get('name_english'),
+                    phone: formData.get('phone'),
+                    email: formData.get('email') || null,
+                    hkid: formData.get('hkid') || null,
+                    dob: formData.get('dob') || null,
+                    gender: formData.get('gender') || null,
+                    nationality: formData.get('nationality') || null,
+                    preferred_area: formData.get('preferred_area') || null,
+                    address: formData.get('address') || null,
+                    emergency_contact: formData.get('emergency_contact') || null,
+                    emergency_contact_phone: formData.get('emergency_contact_phone') || null,
+                    language: languages,
+                    job_position: jobPositions,
+                    experience_years: formData.get('experience_years') || null,
+                    covid_vaccine: formData.get('covid_vaccine') || null,
+                    referrer: formData.get('referrer') || null,
+                    referrer_phone: formData.get('referrer_phone') || null,
+                    company_name: formData.get('company_name') || null,
+                    company_position: formData.get('company_position') || null,
+                    employment_period: formData.get('employment_period') || null,
+                    main_duties: formData.get('main_duties') || null,
+                    contract_status: formData.get('contract_status'),
+                    created_at: new Date().toISOString()
+                };
+
+                const { data: insertedData, error: insertError } = await supabase
+                    .from('care_staff_profiles')
+                    .insert([submissionData])
+                    .select('id, staff_id');
+
+                if (insertError) throw new Error(`資料庫錯誤: ${insertError.message}`);
+                if (!insertedData || insertedData.length === 0) throw new Error('無法獲取新建記錄');
+
+                const newRecord = insertedData[0];
+                const staffId = newRecord.staff_id;
+
+                updateStatus('正在上傳文件，請稍候...');
+
+                // Upload files
+                const fileFields = ['profile_photo', 'hkid_copy', 'certificate_1', 'certificate_2', 'certificate_3', 'certificate_4', 'certificate_5', 'scrc_status'];
+                const fileUrls = {};
+                const fieldMapping = {
+                    'profile_photo': 'profile_photo_url',
+                    'hkid_copy': 'hkid_copy_url',
+                    'certificate_1': 'certificate_1',
+                    'certificate_2': 'certificate_2',
+                    'certificate_3': 'certificate_3',
+                    'certificate_4': 'certificate_4',
+                    'certificate_5': 'certificate_5',
+                    'scrc_status': 'scrc_status'
+                };
+
+                const filesToUpload = fileFields.filter(f => document.getElementById(f)?.files[0]);
+                let uploadedCount = 0;
+
+                for (const fieldName of fileFields) {
+                    const file = document.getElementById(fieldName)?.files[0];
+                    if (file) {
+                        uploadedCount++;
+                        updateStatus(`正在上傳文件 (${uploadedCount}/${filesToUpload.length})...`);
+                        
+                        validateFile(file, fieldName);
+                        const ext = file.name.split('.').pop();
+                        const fileName = `${staffId}_${fieldName}_${Date.now()}.${ext}`;
+                        const filePath = `care-staff/${staffId}/${fileName}`;
+
+                        const { error: uploadError } = await supabase.storage
+                            .from('care-staff-files')
+                            .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+                        if (uploadError) throw new Error(`文件上傳失敗: ${uploadError.message}`);
+
+                        const { data: urlData } = supabase.storage
+                            .from('care-staff-files')
+                            .getPublicUrl(filePath);
+
+                        fileUrls[fieldMapping[fieldName]] = urlData.publicUrl;
+                    }
+                }
+
+                if (Object.keys(fileUrls).length > 0) {
+                    updateStatus('正在完成提交...');
+                    const { error: updateError } = await supabase
+                        .from('care_staff_profiles')
+                        .update(fileUrls)
+                        .eq('id', newRecord.id);
+                    if (updateError) throw new Error(`更新檔案URL失敗: ${updateError.message}`);
+                }
+
+                // Clear any loading message first
+                statusMessage.innerHTML = '';
+
+                // Show success message
+                statusMessage.innerHTML = `
+                    <div class="status-success">
+                        ✅ 已成功遞交申請！<br><br>
+                        您的員工編號是：<strong>${staffId}</strong><br><br>
+                        我們會盡快聯絡您，感謝您的申請！
+                    </div>
+                `;
+
+                // Hide ALL elements in step 5 except success message
+                const step5 = document.querySelector('.step-content[data-step="5"]');
+                if (step5) {
+                    // Hide step title
+                    const title = step5.querySelector('.step-title');
+                    if (title) title.style.display = 'none';
+                    
+                    // Hide description paragraph
+                    const desc = step5.querySelector('p[style*="color"]');
+                    if (desc) desc.style.display = 'none';
+                    
+                    // Hide review content
+                    const reviewContent = step5.querySelector('#review-content');
+                    if (reviewContent) reviewContent.style.display = 'none';
+                    
+                    // Hide privacy box
+                    const privacyBox = step5.querySelector('.privacy-box');
+                    if (privacyBox) privacyBox.style.display = 'none';
+                    
+                    // Hide all form groups (including contract select)
+                    step5.querySelectorAll('.form-group').forEach(fg => fg.style.display = 'none');
+                    
+                    // Hide nav buttons completely
+                    const navBtns = step5.querySelector('.nav-buttons');
+                    if (navBtns) navBtns.style.display = 'none';
+                }
+                
+                // Also hide progress bar
+                const progressContainer = document.querySelector('.progress-container');
+                if (progressContainer) progressContainer.style.display = 'none';
+
+                // Scroll to top after successful submission - multiple methods for Hostinger
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.body.scrollTop = 0;
+                    document.documentElement.scrollTop = 0;
+                    
+                    const container = document.querySelector('.container');
+                    if (container) container.scrollTop = 0;
+                    
+                    const header = document.querySelector('.header');
+                    if (header) header.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    
+                    // Try parent window for iframe
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            window.parent.scrollTo(0, 0);
+                            window.parent.document.body.scrollTop = 0;
+                            window.parent.document.documentElement.scrollTop = 0;
+                        }
+                    } catch (e) {}
+                    
+                    // Post message to parent for Hostinger
+                    try {
+                        window.parent.postMessage({ type: 'scrollToTop' }, '*');
+                    } catch (e) {}
+                }, 100);
+
+            } catch (error) {
+                console.error('提交錯誤:', error);
+                statusMessage.innerHTML = `
+                    <div class="status-error">
+                        ❌ 提交失敗：${error.message}<br>
+                        <small>如問題持續，請聯繫技術支援</small>
+                    </div>
+                `;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '📝 確認並提交申請';
+                
+                // Re-enable previous button on error
+                if (prevBtn) prevBtn.disabled = false;
+                
+                // Scroll to top to show error
+                scrollToTop();
+            }
+        });
+    </script>
+</body>
+</html>
