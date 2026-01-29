@@ -1321,8 +1321,11 @@ export default function AccountingPage() {
               {/* 編輯時顯示當前所屬月份（唯讀） */}
               {!isCreating && editingTransaction.billing_month && (
                 <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">📅 所屬帳單月份</label>
-                  <p className="text-text-primary font-medium">{editingTransaction.billing_month}</p>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-text-secondary">📅 所屬帳單月份</label>
+                    <span className="text-xs text-text-tertiary bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">🔒 不可更改</span>
+                  </div>
+                  <p className="text-text-primary font-medium mt-1">{editingTransaction.billing_month}</p>
                 </div>
               )}
 
