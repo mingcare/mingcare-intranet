@@ -65,6 +65,8 @@ export default function AccountingPage() {
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [isCreating, setIsCreating] = useState(false)  // 標記是新增還是編輯
+  const [billingYear, setBillingYear] = useState<number>(new Date().getFullYear())
+  const [billingMonthNum, setBillingMonthNum] = useState<number>(new Date().getMonth() + 1)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<FinancialTransaction | null>(null)
   const [currentUser, setCurrentUser] = useState<string>('')
@@ -505,13 +507,18 @@ export default function AccountingPage() {
   const openCreateModal = async () => {
     const nextJournalNumber = await getNextJournalNumber()
     const today = new Date().toISOString().split('T')[0]
+    const currentYear = new Date().getFullYear()
+    const currentMonth = new Date().getMonth() + 1
+    
+    setBillingYear(currentYear)
+    setBillingMonthNum(currentMonth)
     
     setEditingTransaction({
       id: '',
       journal_number: nextJournalNumber,
       transaction_code: '',
-      fiscal_year: new Date().getFullYear(),
-      billing_month: '',
+      fiscal_year: currentYear,
+      billing_month: `${currentYear}年${currentMonth}月`,
       transaction_date: today,
       transaction_item: '',
       payment_method: '',
@@ -551,16 +558,15 @@ export default function AccountingPage() {
     
     setSaving(true)
     
-    // 產生 billing_month
-    const txnDate = new Date(editingTransaction.transaction_date)
-    const billingMonth = `${txnDate.getFullYear()}年${txnDate.getMonth() + 1}月`
+    // 使用選擇的 billingYear 和 billingMonthNum
+    const billingMonth = `${billingYear}年${billingMonthNum}月`
     
     const { data, error } = await supabase
       .from('financial_transactions')
       .insert({
         journal_number: editingTransaction.journal_number,
         transaction_code: '',
-        fiscal_year: txnDate.getFullYear(),
+        fiscal_year: billingYear,
         billing_month: billingMonth,
         transaction_date: editingTransaction.transaction_date,
         transaction_item: editingTransaction.transaction_item,
@@ -1275,18 +1281,61 @@ export default function AccountingPage() {
                   />
                 </div>
               </div>
+
+              {/* 所屬月份選擇（僅新增時顯示） */}
+              {isCreating && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">📅 所屬帳單月份</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">年份</label>
+                      <select
+                        value={billingYear}
+                        onChange={(e) => setBillingYear(Number(e.target.value))}
+                        className="input-apple w-full"
+                      >
+                        {availableYears.map(year => (
+                          <option key={year} value={year}>{year}年</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">月份</label>
+                      <select
+                        value={billingMonthNum}
+                        onChange={(e) => setBillingMonthNum(Number(e.target.value))}
+                        className="input-apple w-full"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                          <option key={month} value={month}>{month}月</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                    將存入帳單月份：{billingYear}年{billingMonthNum}月
+                  </p>
+                </div>
+              )}
               
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">交易項目</label>
-                <input
-                  type="text"
-                  value={editingTransaction.transaction_item}
-                  onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_item: e.target.value })}
-                  className="input-apple w-full"
-                />
-              </div>
+              {/* 編輯時顯示當前所屬月份（唯讀） */}
+              {!isCreating && editingTransaction.billing_month && (
+                <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">📅 所屬帳單月份</label>
+                  <p className="text-text-primary font-medium">{editingTransaction.billing_month}</p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">交易項目</label>
+                  <input
+                    type="text"
+                    value={editingTransaction.transaction_item}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, transaction_item: e.target.value })}
+                    className="input-apple w-full"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">付款方式</label>
                   <select

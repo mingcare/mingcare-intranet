@@ -425,9 +425,9 @@ copay_level = 自付比例等級
 - id (uuid, NOT NULL, default gen_random_uuid()) = 系統 ID
 - journal_number (varchar(20)) = 流水號: 00000001, 00000002...
 - transaction_code (varchar(30)) = 原始編號: 2024-05-001
-- fiscal_year (integer, NOT NULL) = 所屬年份: 2024, 2025, 2026
-- billing_month (varchar(20), NOT NULL) = 帳單月份: 2024年5月
-- transaction_date (date, NOT NULL) = 交易日期
+- fiscal_year (integer, NOT NULL) = 所屬年份: 2024, 2025, 2026 (與 billing_month 對應)
+- billing_month (varchar(20), NOT NULL) = 帳單月份，格式: "YYYY年M月" (例如: "2024年5月", "2026年12月")
+- transaction_date (date, NOT NULL) = 交易日期 (實際發生日期，可能與帳單月份不同)
 - transaction_item (text, NOT NULL) = 交易項目描述
 - payment_method (varchar(50)) = 付款方式: 現金, 銀行轉賬, Payme...
 - income_category (varchar(100)) = 收入類別: 服務收入, 股東資本...
@@ -444,6 +444,12 @@ copay_level = 自付比例等級
 - updated_by (text) = 更新者
 - created_at (timestamptz, default now()) = 建立時間
 - updated_at (timestamptz, default now()) = 更新時間
+
+**billing_month 格式說明**:
+- 格式: "YYYY年M月" (年份4位數 + "年" + 月份1-2位數 + "月")
+- 例子: "2024年5月", "2025年12月", "2026年1月"
+- 用途: 用於按帳單月份篩選和統計財務數據
+- 注意: billing_month 可能與 transaction_date 不同（例如跨月帳目歸屬）
 
 **數據統計 (2026-01-26)**:
 | 年份 | 記錄數 |
