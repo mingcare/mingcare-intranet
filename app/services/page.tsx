@@ -48,6 +48,40 @@ import {
 import { exportCalendar, CalendarExportOptions } from '../../services/calendar-export'
 
 // =============================================================================
+// 2026年香港公眾假期
+// =============================================================================
+const HK_PUBLIC_HOLIDAYS_2026: { [key: string]: string } = {
+  '2026-01-01': '元旦',
+  '2026-02-17': '農曆年初一',
+  '2026-02-18': '農曆年初二',
+  '2026-02-19': '農曆年初三',
+  '2026-04-03': '耶穌受難節',
+  '2026-04-04': '耶穌受難節翌日',
+  '2026-04-06': '清明節翌日',
+  '2026-04-07': '復活節星期一翌日',
+  '2026-05-01': '勞動節',
+  '2026-05-25': '佛誕翌日',
+  '2026-06-19': '端午節',
+  '2026-07-01': '香港特別行政區成立紀念日',
+  '2026-09-26': '中秋節翌日',
+  '2026-10-01': '國慶日',
+  '2026-10-19': '重陽節翌日',
+  '2026-12-25': '聖誕節',
+  '2026-12-26': '聖誕節後第一個週日'
+}
+
+// 檢查日期是否為公眾假期
+const isPublicHoliday = (date: Date): { isHoliday: boolean; name: string | null } => {
+  const dateStr = formatDateSafely(date)
+  const holidayName = HK_PUBLIC_HOLIDAYS_2026[dateStr]
+  // 每個星期日也是公眾假期
+  if (date.getDay() === 0) {
+    return { isHoliday: true, name: holidayName || '星期日' }
+  }
+  return { isHoliday: !!holidayName, name: holidayName || null }
+}
+
+// =============================================================================
 // 日期處理輔助函數
 // =============================================================================
 
@@ -345,6 +379,7 @@ function ReportsCalendarView({
           const isCurrentMonth = date.getMonth() === currentMonth
           const isToday = dateStr === formatDateSafely(new Date())
           const isWeekend = date.getDay() === 0 || date.getDay() === 6
+          const holiday = isPublicHoliday(date)
           const dayRecords = calendarData[dateStr] || []
 
           // 根據記錄數量動態調整高度 - 移動端小一些
@@ -361,16 +396,23 @@ function ReportsCalendarView({
               className={`
                 p-1 sm:p-2 border rounded-xl
                 ${!isCurrentMonth ? 'bg-bg-secondary text-text-tertiary border-border-light' :
+                  holiday.isHoliday ? 'bg-red-50 border-red-300' :
                   isWeekend ? 'bg-blue-50 border-blue-200' : 'bg-bg-primary border-border-light'}
                 ${isToday ? 'ring-1 sm:ring-2 ring-primary border-primary' : ''}
               `}
             >
               <div className={`
-                text-xs sm:text-sm font-bold mb-1 sm:mb-2
+                text-xs sm:text-sm font-bold mb-1 sm:mb-2 flex items-center gap-1
                 ${isToday ? 'text-primary' :
+                  holiday.isHoliday ? 'text-red-600' :
                   isCurrentMonth ? 'text-text-primary' : 'text-text-tertiary'}
               `}>
-                {date.getDate()}
+                <span>{date.getDate()}</span>
+                {holiday.isHoliday && holiday.name && holiday.name !== '星期日' && (
+                  <span className="text-xs text-red-500 truncate hidden sm:inline" title={holiday.name}>
+                    {holiday.name.length > 4 ? holiday.name.substring(0, 4) + '..' : holiday.name}
+                  </span>
+                )}
               </div>
 
               {/* 服務記錄 - 移動端優化 */}
@@ -2406,6 +2448,7 @@ function ScheduleTab({
               const isCurrentMonth = date.getMonth() === currentMonth
               const isToday = dateStr === formatDateSafely(new Date())
               const isWeekend = date.getDay() === 0 || date.getDay() === 6
+              const holiday = isPublicHoliday(date)
               const isSelected = selectedDates.includes(dateStr)
               // 合併本地排程和遠端排程
               const remoteSchedules = scheduleData[dateStr] || []
@@ -2428,6 +2471,7 @@ function ScheduleTab({
                     transition-all duration-300 hover:shadow-md
                     ${!isCurrentMonth ? 'bg-bg-secondary text-text-tertiary border-border-light' :
                       isSelected ? 'bg-green-100 border-green-500 border-2' :
+                      holiday.isHoliday ? 'bg-red-50 border-red-300' :
                       isWeekend ? 'bg-blue-50 border-blue-200' : 'bg-bg-primary border-border-light'}
                     ${isToday ? 'ring-2 ring-primary border-primary' : ''}
                     hover:border-primary
@@ -2436,9 +2480,17 @@ function ScheduleTab({
                   <div className={`
                     text-lg font-bold mb-3 flex justify-between items-center
                     ${isToday ? 'text-primary' :
+                      holiday.isHoliday ? 'text-red-600' :
                       isCurrentMonth ? 'text-text-primary' : 'text-text-tertiary'}
                   `}>
-                    <span>{date.getDate()}</span>
+                    <div className="flex flex-col">
+                      <span>{date.getDate()}</span>
+                      {holiday.isHoliday && holiday.name && holiday.name !== '星期日' && (
+                        <span className="text-xs text-red-500 font-normal truncate max-w-[80px]" title={holiday.name}>
+                          {holiday.name.length > 5 ? holiday.name.substring(0, 5) + '..' : holiday.name}
+                        </span>
+                      )}
+                    </div>
                     {isCurrentMonth && (
                       <span className="text-base text-green-600">
                         +
