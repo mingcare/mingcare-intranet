@@ -6387,6 +6387,13 @@ function ScheduleFormModal({
   // 選擇客戶彈窗狀態
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(() => {
+    // 根據排班日期自動設定月份
+    const targetDate = selectedDate || (selectedDates.length > 0 ? selectedDates[0] : null)
+    if (targetDate) {
+      // targetDate 格式為 YYYY-MM-DD
+      const [year, month] = targetDate.split('-')
+      return `${year}-${month}`
+    }
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
@@ -6445,19 +6452,22 @@ function ScheduleFormModal({
         .gte('service_date', currentMonthStart)
         .lte('service_date', currentMonthEnd)
 
+      // 定義記錄類型
+      type BillingRecord = { customer_id: string | null; customer_name: string | null; project_category: string | null }
+
       // 建立上月服務客戶 Set
       const lastMonthCustomers = new Set(
-        (lastMonthRecords || []).map(r => r.customer_id || r.customer_name)
+        ((lastMonthRecords || []) as BillingRecord[]).map(r => r.customer_id || r.customer_name)
       )
 
       // 建立當月已排更客戶 Set
       const currentMonthCustomers = new Set(
-        (currentMonthRecords || []).map(r => r.customer_id || r.customer_name)
+        ((currentMonthRecords || []) as BillingRecord[]).map(r => r.customer_id || r.customer_name)
       )
 
       // 建立客戶類別 Map
       const customerCategoryMap = new Map<string, string>()
-      ;[...(lastMonthRecords || []), ...(currentMonthRecords || [])].forEach(r => {
+      ;([...(lastMonthRecords || []), ...(currentMonthRecords || [])] as BillingRecord[]).forEach(r => {
         if (r.customer_id && r.project_category) {
           customerCategoryMap.set(r.customer_id, r.project_category)
         }
