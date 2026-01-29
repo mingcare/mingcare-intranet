@@ -180,7 +180,14 @@ function ReportsCalendarView({
 }) {
   const [calendarData, setCalendarData] = useState<Record<string, BillingSalaryRecordWithOvernight[]>>({})
   const [loading, setLoading] = useState(true)
-  const [currentDate, setCurrentDate] = useState(new Date())
+  // 從 filters 初始化 currentDate
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (filters.dateRange?.start) {
+      const [year, month] = filters.dateRange.start.split('-').map(Number)
+      return new Date(year, month - 1, 1)
+    }
+    return new Date()
+  })
   const [isMobile, setIsMobile] = useState(false)
   const [viewMode, setViewMode] = useState<'calendar' | 'cards'>('cards') // 新增視圖模式狀態，默認為卡片
   const [allRecords, setAllRecords] = useState<BillingSalaryRecord[]>([]) // 存儲所有記錄用於卡片視圖
@@ -196,12 +203,10 @@ function ReportsCalendarView({
     if (filters.dateRange?.start) {
       // 解析日期字串 (格式: YYYY-MM-DD)，避免時區問題
       const [year, month] = filters.dateRange.start.split('-').map(Number)
-      // 只有當月份不同時才更新，避免不必要的重新渲染
-      if (year !== currentDate.getFullYear() || (month - 1) !== currentDate.getMonth()) {
-        setCurrentDate(new Date(year, month - 1, 1))
-      }
+      console.log('📅 ReportsCalendarView 同步月曆到:', year, month)
+      setCurrentDate(new Date(year, month - 1, 1))
     }
-  }, [filters.dateRange?.start])
+  }, [filters.dateRange.start])
 
   // 監聽螢幕尺寸變化
   useEffect(() => {
@@ -1898,7 +1903,14 @@ function ScheduleTab({
   onCalendarExport: () => void;
   calendarExportLoading: boolean;
 }) {
-  const [currentDate, setCurrentDate] = useState(new Date())
+  // 從 filters 初始化 currentDate
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (filters.dateRange?.start) {
+      const [year, month] = filters.dateRange.start.split('-').map(Number)
+      return new Date(year, month - 1, 1)
+    }
+    return new Date()
+  })
   const [scheduleData, setScheduleData] = useState<Record<string, any[]>>({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -1951,12 +1963,10 @@ function ScheduleTab({
     if (filters.dateRange?.start) {
       // 解析日期字串 (格式: YYYY-MM-DD)，避免時區問題
       const [year, month] = filters.dateRange.start.split('-').map(Number)
-      // 只有當月份不同時才更新，避免不必要的重新渲染
-      if (year !== currentDate.getFullYear() || (month - 1) !== currentDate.getMonth()) {
-        setCurrentDate(new Date(year, month - 1, 1))
-      }
+      console.log('📅 ScheduleTab 同步月曆到:', year, month)
+      setCurrentDate(new Date(year, month - 1, 1))
     }
-  }, [filters.dateRange?.start])
+  }, [filters.dateRange.start])
 
   // 載入月曆數據
   useEffect(() => {
