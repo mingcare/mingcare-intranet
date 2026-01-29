@@ -608,12 +608,12 @@ export default function AccountingPage() {
     }
 
     // 只考慮純數字的 journal_number
-    const numericOnly = data.filter(r => /^\d+$/.test(r.journal_number))
+    const numericOnly = data.filter((r: { journal_number: string }) => /^\d+$/.test(r.journal_number))
     if (numericOnly.length === 0) {
       return '00000001'
     }
 
-    const maxNumber = Math.max(...numericOnly.map(r => parseInt(r.journal_number, 10)))
+    const maxNumber = Math.max(...numericOnly.map((r: { journal_number: string }) => parseInt(r.journal_number, 10)))
     const nextNumber = maxNumber + 1
     return nextNumber.toString().padStart(8, '0')
   }
