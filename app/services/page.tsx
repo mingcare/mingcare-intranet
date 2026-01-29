@@ -1927,6 +1927,7 @@ function ScheduleTab({
     project_category: string
     hasLastMonthService: boolean
     hasCurrentMonthSchedule: boolean
+    currentMonthScheduleCount: number
   }[]>([])
   const [globalPickerLoading, setGlobalPickerLoading] = useState(false)
 
@@ -2068,9 +2069,13 @@ function ScheduleTab({
         .gte('service_date', currentMonthStart)
         .lte('service_date', currentMonthEnd)
 
-      const currentMonthCustomers = new Set<string>()
+      // 計算每個客戶本月的排程數量
+      const currentMonthScheduleCount = new Map<string, number>()
       ;(currentMonthRecords || []).forEach((record: { customer_id: string | null; customer_name: string | null }) => {
-        currentMonthCustomers.add(record.customer_id || record.customer_name || '')
+        const key = record.customer_id || record.customer_name || ''
+        if (key) {
+          currentMonthScheduleCount.set(key, (currentMonthScheduleCount.get(key) || 0) + 1)
+        }
       })
 
       // 定義客戶列表項目類型
@@ -2083,6 +2088,7 @@ function ScheduleTab({
         project_category: string
         hasLastMonthService: boolean
         hasCurrentMonthSchedule: boolean
+        currentMonthScheduleCount: number
       }
 
       // 組合客戶列表
@@ -2098,7 +2104,8 @@ function ScheduleTab({
           customer_type: customer.customer_type || '',
           project_category: projectCategory,
           hasLastMonthService,
-          hasCurrentMonthSchedule: currentMonthCustomers.has(key)
+          hasCurrentMonthSchedule: currentMonthScheduleCount.has(key),
+          currentMonthScheduleCount: currentMonthScheduleCount.get(key) || 0
         }
       })
 
@@ -2940,13 +2947,17 @@ function ScheduleTab({
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-text-primary">{customer.customer_name}</span>
                             {customer.hasLastMonthService && (
                               <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">上月有服務</span>
                             )}
-                            {customer.hasCurrentMonthSchedule && (
-                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">本月已排</span>
+                            {customer.currentMonthScheduleCount > 0 ? (
+                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                                本月已排 {customer.currentMonthScheduleCount} 更
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">本月未排更</span>
                             )}
                           </div>
                           <div className="text-xs text-text-secondary mt-1">
