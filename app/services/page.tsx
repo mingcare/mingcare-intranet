@@ -6399,6 +6399,7 @@ function ScheduleFormModal({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [pickerCategory, setPickerCategory] = useState<string>('')
+  const [pickerProjectCategory, setPickerProjectCategory] = useState<string>('')
   const [pickerShowAll, setPickerShowAll] = useState(false)
   const [pickerCustomerList, setPickerCustomerList] = useState<{
     customer_id: string
@@ -6406,6 +6407,7 @@ function ScheduleFormModal({
     phone: string
     service_address: string
     customer_type: string
+    project_category: string
     hasLastMonthService: boolean
     hasCurrentMonthSchedule: boolean
   }[]>([])
@@ -6454,7 +6456,7 @@ function ScheduleFormModal({
         .lte('service_date', currentMonthEnd)
 
       // 定義記錄類型
-      type BillingRecord = { customer_id: string | null; customer_name: string | null }
+      type BillingRecord = { customer_id: string | null; customer_name: string | null; project_category: string | null }
       type CustomerRecord = { customer_id: string; customer_name: string; phone: string | null; service_address: string | null; customer_type: string | null }
 
       // 建立上月服務客戶 Set
@@ -6467,7 +6469,14 @@ function ScheduleFormModal({
         ((currentMonthRecords || []) as BillingRecord[]).map(r => r.customer_id || r.customer_name)
       )
 
-      // 組合客戶列表（排除家訪客戶）
+      // 建立客戶 project_category Map（從 billing 記錄取得）
+      const customerProjectCategoryMap = new Map<string, string>()
+      ;([...(lastMonthRecords || []), ...(currentMonthRecords || [])] as BillingRecord[]).forEach(r => {
+        if ((r.customer_id || r.customer_name) && r.project_category) {
+          customerProjectCategoryMap.set(r.customer_id || r.customer_name || '', r.project_category)
+        }
+      })
+
       // 組合客戶列表（排除家訪客戶）
       let result = ((customers || []) as CustomerRecord[])
         .filter(c => c.customer_type !== '家訪客戶') // 排除家訪客戶
@@ -6477,6 +6486,7 @@ function ScheduleFormModal({
           phone: c.phone || '',
           service_address: c.service_address || '',
           customer_type: c.customer_type || '',
+          project_category: customerProjectCategoryMap.get(c.customer_id) || customerProjectCategoryMap.get(c.customer_name) || '',
           hasLastMonthService: lastMonthCustomers.has(c.customer_id) || lastMonthCustomers.has(c.customer_name),
           hasCurrentMonthSchedule: currentMonthCustomers.has(c.customer_id) || currentMonthCustomers.has(c.customer_name)
         }))
@@ -6484,6 +6494,11 @@ function ScheduleFormModal({
       // 篩選客戶類型
       if (pickerCategory) {
         result = result.filter(c => c.customer_type === pickerCategory)
+      }
+
+      // 篩選所屬項目
+      if (pickerProjectCategory) {
+        result = result.filter(c => c.project_category === pickerProjectCategory)
       }
 
       // 只顯示上月有服務的
@@ -6512,7 +6527,7 @@ function ScheduleFormModal({
     if (showCustomerPicker) {
       loadPickerCustomers()
     }
-  }, [showCustomerPicker, pickerMonth, pickerCategory, pickerShowAll])
+  }, [showCustomerPicker, pickerMonth, pickerCategory, pickerProjectCategory, pickerShowAll])
 
   // 計算機狀態
   const [showCalculator, setShowCalculator] = useState(false)
@@ -7119,6 +7134,18 @@ function ScheduleFormModal({
                                   ))}
                                 </select>
 
+                                {/* 所屬項目 */}
+                                <select
+                                  value={pickerProjectCategory}
+                                  onChange={e => setPickerProjectCategory(e.target.value)}
+                                  className="px-3 py-1.5 border border-border-light rounded-lg text-sm"
+                                >
+                                  <option value="">全部項目</option>
+                                  {PROJECT_CATEGORY_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+
                                 {/* 顯示全部/只顯示上月有服務 */}
                                 <button
                                   type="button"
@@ -7150,7 +7177,7 @@ function ScheduleFormModal({
                                   {pickerCustomerList.map((customer, index) => (
                                     <div
                                       key={customer.customer_id || index}
-                                      onClick={() => {
+                                      onClick={async () => {
                                         // 選擇客戶
                                         updateField('customer_name', customer.customer_name)
                                         updateField('customer_id', customer.customer_id)
@@ -7161,6 +7188,47 @@ function ScheduleFormModal({
                                         }
                                         setCustomerSearchTerm(customer.customer_name)
                                         setShowCustomerPicker(false)
+
+                                        // 載入該客戶最近的護理人員
+                                        setCustomerStaffHistoryLoading(true)
+                                        try {
+                                          const { data, error } = await supabase
+                                            .from('billing_salary_data')
+                                            .select('staff_id, care_staff_name, service_date')
+                                            .or(`customer_id.eq.${customer.customer_id},customer_name.eq.${customer.customer_name}`)
+                                            .order('service_date', { ascending: false })
+                                            .limit(20)
+
+                                          if (error) {
+                                            console.error('查詢客戶歷史護理人員失敗:', error)
+                                            setCustomerStaffHistory([])
+                                          } else {
+                                            // 去重並統計服務次數，取最近 5 個不同的護理人員
+                                            const staffMap = new Map<string, { staff_id: string, care_staff_name: string, service_date: string, service_count: number }>()
+                                            for (const record of data || []) {
+                                              if (record.staff_id && record.care_staff_name) {
+                                                const existing = staffMap.get(record.staff_id)
+                                                if (existing) {
+                                                  existing.service_count++
+                                                } else {
+                                                  staffMap.set(record.staff_id, {
+                                                    staff_id: record.staff_id,
+                                                    care_staff_name: record.care_staff_name,
+                                                    service_date: record.service_date,
+                                                    service_count: 1
+                                                  })
+                                                }
+                                              }
+                                            }
+                                            // 取前 5 個
+                                            setCustomerStaffHistory(Array.from(staffMap.values()).slice(0, 5))
+                                          }
+                                        } catch (err) {
+                                          console.error('查詢客戶歷史護理人員錯誤:', err)
+                                          setCustomerStaffHistory([])
+                                        } finally {
+                                          setCustomerStaffHistoryLoading(false)
+                                        }
                                       }}
                                       className="p-3 hover:bg-blue-50 cursor-pointer transition-colors"
                                     >
@@ -7170,13 +7238,18 @@ function ScheduleFormModal({
                                             {customer.customer_name}
                                             <span className="text-text-secondary text-sm ml-1">({customer.customer_id})</span>
                                           </div>
-                                          <div className="text-xs text-text-secondary mt-0.5">
+                                          <div className="text-xs text-text-secondary mt-0.5 flex flex-wrap items-center gap-1">
+                                            {customer.customer_type && (
+                                              <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                                {customer.customer_type}
+                                              </span>
+                                            )}
                                             {customer.project_category && (
-                                              <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mr-2">
+                                              <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
                                                 {customer.project_category}
                                               </span>
                                             )}
-                                            {customer.phone}
+                                            {customer.phone && <span className="ml-1">{customer.phone}</span>}
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-sm">
