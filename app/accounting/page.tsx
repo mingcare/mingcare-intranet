@@ -25,6 +25,7 @@ interface FinancialTransaction {
   is_deleted?: boolean
   created_by?: string
   updated_by?: string
+  sort_order?: number
 }
 
 // 審計日誌類型
@@ -304,6 +305,8 @@ export default function AccountingPage() {
         .lte('transaction_date', endDate)    // 交易日期 <= 年末
         .or('is_deleted.is.null,is_deleted.eq.false')  // 只顯示未刪除的
         .order('transaction_date', { ascending: true })
+        .order('sort_order', { ascending: true })
+        .order('journal_number', { ascending: true })
         .range(offset, offset + pageSize - 1)
 
       if (error) {
@@ -1096,6 +1099,43 @@ export default function AccountingPage() {
     fetchTransactions()
   }
 
+  // 移動交易順序（上移/下移）
+  const moveTransaction = async (txn: FinancialTransaction, direction: 'up' | 'down', transactionList: FinancialTransaction[]) => {
+    // 找出同一天的所有交易
+    const sameDayTxns = transactionList.filter(t => t.transaction_date === txn.transaction_date)
+    const currentIndex = sameDayTxns.findIndex(t => t.id === txn.id)
+    
+    if (currentIndex === -1) return
+    if (direction === 'up' && currentIndex === 0) return
+    if (direction === 'down' && currentIndex === sameDayTxns.length - 1) return
+
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const swapTxn = sameDayTxns[swapIndex]
+
+    // 交換 sort_order
+    const currentSortOrder = txn.sort_order ?? currentIndex
+    const swapSortOrder = swapTxn.sort_order ?? swapIndex
+
+    // 更新數據庫
+    const { error: error1 } = await supabase
+      .from('financial_transactions')
+      .update({ sort_order: swapSortOrder })
+      .eq('id', txn.id)
+
+    const { error: error2 } = await supabase
+      .from('financial_transactions')
+      .update({ sort_order: currentSortOrder })
+      .eq('id', swapTxn.id)
+
+    if (error1 || error2) {
+      console.error('Error updating sort order:', error1 || error2)
+      return
+    }
+
+    // 重新獲取數據
+    fetchTransactions()
+  }
+
   // 查看審計日誌
   const viewAuditLog = async (txn: FinancialTransaction) => {
     setSelectedTransactionForLog(txn)
@@ -1489,7 +1529,7 @@ export default function AccountingPage() {
                       // 餘額從上月結餘開始計算
                       let runningBalance = getPettyCashOpeningBalance()
                       const data = getPettyCashTransactions()
-                      return data.map((txn) => {
+                      return data.map((txn, index) => {
                         // 計算餘額：零用金補充交易的 expense_amount 算作補充（加），其他算支出（減）
                         const isReplenishment = isPettyCashReplenishment(txn)
                         if (isReplenishment) {
@@ -1497,6 +1537,11 @@ export default function AccountingPage() {
                         } else {
                           runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
                         }
+                        // 判斷同一天是否有多筆交易（用於顯示排序按鈕）
+                        const sameDayTxns = data.filter(t => t.transaction_date === txn.transaction_date)
+                        const sameDayIndex = sameDayTxns.findIndex(t => t.id === txn.id)
+                        const canMoveUp = sameDayTxns.length > 1 && sameDayIndex > 0
+                        const canMoveDown = sameDayTxns.length > 1 && sameDayIndex < sameDayTxns.length - 1
                         return (
                           <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
@@ -1568,6 +1613,30 @@ export default function AccountingPage() {
                                 >
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                  </svg>
+                                </button>
+                                )}
+                                {/* 上移按鈕 */}
+                                {canMoveUp && (
+                                <button
+                                  onClick={() => moveTransaction(txn, 'up', data)}
+                                  className="p-1.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  title="上移"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                )}
+                                {/* 下移按鈕 */}
+                                {canMoveDown && (
+                                <button
+                                  onClick={() => moveTransaction(txn, 'down', data)}
+                                  className="p-1.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  title="下移"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
                                 )}
