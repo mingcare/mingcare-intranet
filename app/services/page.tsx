@@ -194,11 +194,11 @@ function ReportsCalendarView({
   // 當 filters 的日期範圍變化時，自動跳轉月曆到對應月份
   useEffect(() => {
     if (filters.dateRange?.start) {
-      const filterStartDate = new Date(filters.dateRange.start)
+      // 解析日期字串 (格式: YYYY-MM-DD)，避免時區問題
+      const [year, month] = filters.dateRange.start.split('-').map(Number)
       // 只有當月份不同時才更新，避免不必要的重新渲染
-      if (filterStartDate.getFullYear() !== currentDate.getFullYear() || 
-          filterStartDate.getMonth() !== currentDate.getMonth()) {
-        setCurrentDate(filterStartDate)
+      if (year !== currentDate.getFullYear() || (month - 1) !== currentDate.getMonth()) {
+        setCurrentDate(new Date(year, month - 1, 1))
       }
     }
   }, [filters.dateRange?.start])
@@ -1949,11 +1949,11 @@ function ScheduleTab({
   // 當 filters 的日期範圍變化時，自動跳轉月曆到對應月份
   useEffect(() => {
     if (filters.dateRange?.start) {
-      const filterStartDate = new Date(filters.dateRange.start)
+      // 解析日期字串 (格式: YYYY-MM-DD)，避免時區問題
+      const [year, month] = filters.dateRange.start.split('-').map(Number)
       // 只有當月份不同時才更新，避免不必要的重新渲染
-      if (filterStartDate.getFullYear() !== currentDate.getFullYear() || 
-          filterStartDate.getMonth() !== currentDate.getMonth()) {
-        setCurrentDate(filterStartDate)
+      if (year !== currentDate.getFullYear() || (month - 1) !== currentDate.getMonth()) {
+        setCurrentDate(new Date(year, month - 1, 1))
       }
     }
   }, [filters.dateRange?.start])
@@ -3570,7 +3570,12 @@ function ReportsTab({ filters, setFilters, updateDateRange, exportLoading, handl
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4">
             <div className="flex items-center gap-4">
               <h3 className="text-lg font-semibold text-text-primary">服務記錄</h3>
-              <span className="text-sm text-text-tertiary">2025年12月</span>
+              <span className="text-sm text-text-tertiary">
+                {(() => {
+                  const [year, month] = filters.dateRange.start.split('-').map(Number)
+                  return `${year}年${month}月`
+                })()}
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
