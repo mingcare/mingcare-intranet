@@ -7084,8 +7084,8 @@ function ScheduleFormModal({
 
                       {/* 選擇客戶彈窗 */}
                       {showCustomerPicker && (
-                        <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center" onClick={() => setShowCustomerPicker(false)}>
-                          <div className="bg-white rounded-xl w-[90%] max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center" onClick={() => setShowCustomerPicker(false)}>
+                          <div className="bg-white rounded-xl w-[90%] max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl z-[10002]" onClick={e => e.stopPropagation()}>
                             {/* 彈窗標題 */}
                             <div className="p-4 border-b border-border-light bg-bg-secondary">
                               <div className="flex items-center justify-between mb-3">
