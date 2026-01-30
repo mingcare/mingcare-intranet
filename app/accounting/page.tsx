@@ -51,10 +51,12 @@ interface CategoryOption {
 }
 
 type ViewMode = 'ledger' | 'petty_cash'
+type AccountType = 'all' | 'savings' | 'current'  // 儲蓄戶口 / 支票戶口
 
 const DISPLAY_START_DATE = '2025-04-01'
 const DISPLAY_START_MONTH = '2025-04'
 const LEDGER_OPENING_BALANCE = 82755.59
+const CHEQUE_ACCOUNT_OPENING_BALANCE = 1086.54  // 支票戶口期初 (2025-03-31)
 
 const isOnOrAfter = (dateStr: string, cutoff: string) => dateStr >= cutoff
 
@@ -66,6 +68,7 @@ export default function AccountingPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('ledger')
+  const [accountType, setAccountType] = useState<AccountType>('all')  // 戶口類型篩選
   const [showExcludedModal, setShowExcludedModal] = useState(false)
   
   // 編輯相關狀態
@@ -347,18 +350,34 @@ export default function AccountingPage() {
 
   // 篩選流水帳交易：
   // 1. 銀行轉賬（所有，包括 Petty Cash 補充）
-  // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
-  // 3. 現金交易（僅不從零用金扣除的支出）
+  // 2. 支票交易（支票戶口）
+  // 3. 付款方式為空的記錄（顯示在流水帳以免遺漏）
+  // 4. 現金交易（僅不從零用金扣除的支出）
   const getLedgerTransactions = () => {
     let filtered = transactions.filter(t => {
       const paymentMethod = (t.payment_method || '').trim()
       const isCashPayment = paymentMethod === '現金'
 
-      return (
+      // 基本篩選：銀行轉賬、支票、空白、非零用金現金
+      const isLedgerTransaction = (
         paymentMethod === '銀行轉賬' ||
+        paymentMethod === '支票' ||
         !paymentMethod || // 付款方式為空的顯示在流水帳
         (isCashPayment && t.deduct_from_petty_cash === false)
       )
+
+      if (!isLedgerTransaction) return false
+
+      // 戶口類型篩選
+      if (accountType === 'savings') {
+        // 儲蓄戶口：銀行轉賬、FPS、Payme（非支票）
+        return paymentMethod !== '支票'
+      } else if (accountType === 'current') {
+        // 支票戶口：只顯示支票交易
+        return paymentMethod === '支票'
+      }
+
+      return true // accountType === 'all'
     }).filter(t => isOnOrAfter(t.transaction_date, DISPLAY_START_DATE))
 
     if (selectedMonth !== 'all') {
@@ -1283,6 +1302,44 @@ export default function AccountingPage() {
           </button>
         </div>
 
+        {/* 戶口類型篩選（只在流水帳視圖顯示） */}
+        {viewMode === 'ledger' && (
+          <div className="flex gap-2 p-1 bg-bg-secondary rounded-xl">
+            <button
+              onClick={() => setAccountType('all')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                accountType === 'all'
+                  ? 'bg-white dark:bg-fill-tertiary text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              全部戶口
+            </button>
+            <button
+              onClick={() => setAccountType('savings')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                accountType === 'savings'
+                  ? 'bg-white dark:bg-fill-tertiary text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <span className="mr-1">🏦</span>
+              儲蓄戶口
+            </button>
+            <button
+              onClick={() => setAccountType('current')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                accountType === 'current'
+                  ? 'bg-white dark:bg-fill-tertiary text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <span className="mr-1">📝</span>
+              支票戶口
+            </button>
+          </div>
+        )}
+
         {/* 篩選器 */}
         <div className="card-apple">
           <div className="card-apple-content">
@@ -1402,9 +1459,20 @@ export default function AccountingPage() {
             <div className="card-apple-content p-0">
               <div className="px-4 py-3 border-b border-border-light bg-bg-secondary">
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
-                  <span>🏦</span> 流水帳 - {selectedMonth !== 'all' ? formatMonth(selectedMonth) : `${selectedYear}年全年`}
+                  <span>{accountType === 'current' ? '📝' : '🏦'}</span> 
+                  {accountType === 'current' 
+                    ? '支票戶口' 
+                    : accountType === 'savings' 
+                    ? '儲蓄戶口' 
+                    : '流水帳'} - {selectedMonth !== 'all' ? formatMonth(selectedMonth) : `${selectedYear}年全年`}
                 </h3>
-                <p className="text-xs text-text-tertiary mt-1">銀行轉賬及非零用金現金支出</p>
+                <p className="text-xs text-text-tertiary mt-1">
+                  {accountType === 'current' 
+                    ? '支票交易記錄（期初餘額：$1,086.54）' 
+                    : accountType === 'savings'
+                    ? '銀行轉賬及非零用金現金支出（期初餘額：$82,755.59）'
+                    : '銀行轉賬、支票及非零用金現金支出'}
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1422,8 +1490,15 @@ export default function AccountingPage() {
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {(() => {
+                      // 根據戶口類型選擇對應的期初餘額
+                      const getOpeningBalance = () => {
+                        if (accountType === 'current') {
+                          return CHEQUE_ACCOUNT_OPENING_BALANCE  // 支票戶口期初餘額
+                        }
+                        return LEDGER_OPENING_BALANCE  // 儲蓄戶口或全部
+                      }
                       const ledgerOpeningBalance = (selectedMonth === 'all' || selectedMonth >= DISPLAY_START_MONTH)
-                        ? LEDGER_OPENING_BALANCE
+                        ? getOpeningBalance()
                         : 0
                       let runningBalance = ledgerOpeningBalance
                       const data = getLedgerTransactions()
