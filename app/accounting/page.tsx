@@ -1581,32 +1581,32 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
-                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                            <td className="px-2 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-0.5">
                                 <button
                                   onClick={() => openEditModal(txn)}
-                                  className="p-1.5 rounded hover:bg-primary/10 text-primary transition-colors"
+                                  className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
                                   title="編輯"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
                                 <button
                                   onClick={() => viewAuditLog(txn)}
-                                  className="p-1.5 rounded hover:bg-info/10 text-info transition-colors"
+                                  className="p-1 rounded hover:bg-info/10 text-info transition-colors"
                                   title="查看記錄"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                   </svg>
                                 </button>
                                 <button
                                   onClick={() => confirmDelete(txn)}
-                                  className="p-1.5 rounded hover:bg-error/10 text-error transition-colors"
+                                  className="p-1 rounded hover:bg-error/10 text-error transition-colors"
                                   title="刪除"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
@@ -1614,10 +1614,10 @@ export default function AccountingPage() {
                                 {!isReplenishment && (
                                 <button
                                   onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
-                                  className="p-1.5 rounded hover:bg-warning/10 text-warning transition-colors"
+                                  className="p-1 rounded hover:bg-warning/10 text-warning transition-colors"
                                   title="移至流水帳"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                   </svg>
                                 </button>
@@ -1626,10 +1626,10 @@ export default function AccountingPage() {
                                 {canMoveUp && (
                                 <button
                                   onClick={() => moveTransaction(txn, 'up', data)}
-                                  className="p-1.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  className="p-1 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
                                   title="上移"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                   </svg>
                                 </button>
@@ -1638,10 +1638,10 @@ export default function AccountingPage() {
                                 {canMoveDown && (
                                 <button
                                   onClick={() => moveTransaction(txn, 'down', data)}
-                                  className="p-1.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  className="p-1 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
                                   title="下移"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
