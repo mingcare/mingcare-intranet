@@ -52,6 +52,12 @@ interface CategoryOption {
 
 type ViewMode = 'ledger' | 'petty_cash'
 
+const DISPLAY_START_DATE = '2025-04-01'
+const DISPLAY_START_MONTH = '2025-04'
+const LEDGER_OPENING_BALANCE = 82755.59
+
+const isOnOrAfter = (dateStr: string, cutoff: string) => dateStr >= cutoff
+
 export default function AccountingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -99,7 +105,7 @@ export default function AccountingPage() {
   const [reimbursementStatuses, setReimbursementStatuses] = useState<CategoryOption[]>([])
 
   // 可用年份列表 - 獨立從數據庫獲取
-  const [availableYears, setAvailableYears] = useState<number[]>([2024, 2025, 2026])
+  const [availableYears, setAvailableYears] = useState<number[]>([2025, 2026])
   
   // 零用金歷史累計餘額（用於計算上月結餘）
   const [pettyCashHistoricalBalance, setPettyCashHistoricalBalance] = useState<Record<string, number>>({})
@@ -147,9 +153,11 @@ export default function AccountingPage() {
         const date = new Date(t.transaction_date)
         return date.getFullYear()
       })
-      // 確保至少有 2024, 2025, 2026 年
-      const defaultYears = [2024, 2025, 2026]
-      const allYears: number[] = Array.from(new Set([...yearsFromDb, ...defaultYears])).sort((a, b) => b - a)
+      // 確保至少有 2025, 2026 年，並隱藏 2025-04-01 之前的年份
+      const defaultYears = [2025, 2026]
+      const allYears: number[] = Array.from(new Set([...yearsFromDb, ...defaultYears]))
+        .filter(year => year >= 2025)
+        .sort((a, b) => b - a)
       setAvailableYears(allYears)
     }
   }
@@ -184,12 +192,15 @@ export default function AccountingPage() {
       offset += pageSize
     }
 
-    // 篩選零用金相關交易
+    // 篩選零用金相關交易（2025-04-01 之後）
     const pettyCashTxns = allData.filter(t => 
-      (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
-      t.expense_category === 'Petty Cash' ||
-      t.income_category === '期初調整' ||
-      t.expense_category === '期初調整'
+      isOnOrAfter(t.transaction_date, DISPLAY_START_DATE) &&
+      (
+        (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
+        t.expense_category === 'Petty Cash' ||
+        t.income_category === '期初調整' ||
+        t.expense_category === '期初調整'
+      )
     )
 
     // 按月份計算累計餘額
@@ -348,7 +359,7 @@ export default function AccountingPage() {
         !paymentMethod || // 付款方式為空的顯示在流水帳
         (isCashPayment && t.deduct_from_petty_cash === false)
       )
-    })
+    }).filter(t => isOnOrAfter(t.transaction_date, DISPLAY_START_DATE))
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
@@ -397,7 +408,7 @@ export default function AccountingPage() {
           (isCashOrMissing && t.deduct_from_petty_cash !== false)
         )
       )
-    })
+    }).filter(t => isOnOrAfter(t.transaction_date, DISPLAY_START_DATE))
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
@@ -486,7 +497,7 @@ export default function AccountingPage() {
   // 取得可用月份（從交易日期提取）
   const getAvailableMonths = () => {
     const months = [...new Set(transactions.map(t => getMonthFromDate(t.transaction_date)))]
-    return months.sort()
+    return months.filter(month => month >= DISPLAY_START_MONTH).sort()
   }
 
   // 格式化月份顯示
@@ -1411,7 +1422,10 @@ export default function AccountingPage() {
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {(() => {
-                      let runningBalance = 0
+                      const ledgerOpeningBalance = (selectedMonth === 'all' || selectedMonth >= DISPLAY_START_MONTH)
+                        ? LEDGER_OPENING_BALANCE
+                        : 0
+                      let runningBalance = ledgerOpeningBalance
                       const data = getLedgerTransactions()
                       return data.map((txn, index) => {
                         runningBalance += (txn.income_amount || 0) - (txn.expense_amount || 0)
