@@ -1583,11 +1583,27 @@ export default function AccountingPage() {
                             </td>
                             <td className="px-1 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="inline-flex items-center gap-1">
-                                {/* 排序按鈕組 - 用文字顯示方便調試 */}
-                                <span className="text-purple-500 text-xs font-mono">
-                                  {canMoveUp ? '↑' : ' '}
-                                  {canMoveDown ? '↓' : ' '}
-                                </span>
+                                {/* 排序按鈕組 - 始終顯示，禁用時弱化 */}
+                                <button
+                                  onClick={() => canMoveUp && moveTransaction(txn, 'up', data)}
+                                  className={`p-0.5 rounded transition-colors ${canMoveUp ? 'hover:bg-purple-500/10 text-purple-500' : 'text-purple-300 cursor-not-allowed'}`}
+                                  title="上移"
+                                  disabled={!canMoveUp}
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => canMoveDown && moveTransaction(txn, 'down', data)}
+                                  className={`p-0.5 rounded transition-colors ${canMoveDown ? 'hover:bg-purple-500/10 text-purple-500' : 'text-purple-300 cursor-not-allowed'}`}
+                                  title="下移"
+                                  disabled={!canMoveDown}
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
                                 <button
                                   onClick={() => openEditModal(txn)}
                                   className="p-0.5 rounded hover:bg-primary/10 text-primary transition-colors"
