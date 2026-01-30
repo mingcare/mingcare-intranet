@@ -378,16 +378,24 @@ export default function AccountingPage() {
   // 2. expense_category = 'Petty Cash'（當作補充顯示）
   // 注意：系統調整交易不在列表顯示，但計入餘額計算
   const getPettyCashTransactions = () => {
-    let filtered = transactions.filter(t => 
-      // 排除系統調整（不在表格顯示）
-      !isSystemAdjustment(t) &&
-      (
-        // 現金交易（排除已標記不從零用金扣除的）
-        (t.payment_method === '現金' && t.deduct_from_petty_cash !== false) ||
-        // 或者是 Petty Cash 補充交易
-        isPettyCashReplenishment(t)
+    let filtered = transactions.filter(t => {
+      const paymentMethod = (t.payment_method || '').trim()
+      const isCashPayment = paymentMethod === '現金'
+      const isExplicitPettyCash = t.deduct_from_petty_cash === true
+
+      return (
+        // 排除系統調整（不在表格顯示）
+        !isSystemAdjustment(t) &&
+        (
+          // 明確標記從零用金扣除
+          isExplicitPettyCash ||
+          // 現金交易（排除已標記不從零用金扣除的）
+          (isCashPayment && t.deduct_from_petty_cash !== false) ||
+          // 或者是 Petty Cash 補充交易
+          isPettyCashReplenishment(t)
+        )
       )
-    )
+    })
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
