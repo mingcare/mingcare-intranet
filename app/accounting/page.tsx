@@ -1548,6 +1548,10 @@ export default function AccountingPage() {
                         const isLastOfDay = sameDayIndex === sameDayTxns.length - 1
                         const canMoveUp = sameDayTxns.length > 1 && !isFirstOfDay
                         const canMoveDown = sameDayTxns.length > 1 && !isLastOfDay
+                        // Debug
+                        if (txn.transaction_date === '2026-01-05') {
+                          console.log(`05/01: ${txn.journal_number} idx=${sameDayIndex}/${sameDayTxns.length} first=${isFirstOfDay} last=${isLastOfDay} UP=${canMoveUp} DOWN=${canMoveDown}`)
+                        }
                         return (
                           <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
