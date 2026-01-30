@@ -1396,7 +1396,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">收入</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-48">操作</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary min-w-[180px]">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1525,7 +1525,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">補充</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-48">操作</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary min-w-[180px]">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1581,11 +1581,35 @@ export default function AccountingPage() {
                             <td className={`px-3 py-2 text-right font-mono font-bold ${runningBalance >= 0 ? 'text-success' : 'text-error'}`}>
                               {formatCurrency(runningBalance)}
                             </td>
-                            <td className="px-2 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-0.5">
+                            <td className="px-1 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="inline-flex items-center gap-0.5">
+                                {/* 上移按鈕 */}
+                                {canMoveUp ? (
+                                <button
+                                  onClick={() => moveTransaction(txn, 'up', data)}
+                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  title="上移"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                ) : <span className="w-4" />}
+                                {/* 下移按鈕 */}
+                                {canMoveDown ? (
+                                <button
+                                  onClick={() => moveTransaction(txn, 'down', data)}
+                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  title="下移"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                                ) : <span className="w-4" />}
                                 <button
                                   onClick={() => openEditModal(txn)}
-                                  className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
+                                  className="p-0.5 rounded hover:bg-primary/10 text-primary transition-colors"
                                   title="編輯"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1594,7 +1618,7 @@ export default function AccountingPage() {
                                 </button>
                                 <button
                                   onClick={() => viewAuditLog(txn)}
-                                  className="p-1 rounded hover:bg-info/10 text-info transition-colors"
+                                  className="p-0.5 rounded hover:bg-info/10 text-info transition-colors"
                                   title="查看記錄"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1603,7 +1627,7 @@ export default function AccountingPage() {
                                 </button>
                                 <button
                                   onClick={() => confirmDelete(txn)}
-                                  className="p-1 rounded hover:bg-error/10 text-error transition-colors"
+                                  className="p-0.5 rounded hover:bg-error/10 text-error transition-colors"
                                   title="刪除"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1614,35 +1638,11 @@ export default function AccountingPage() {
                                 {!isReplenishment && (
                                 <button
                                   onClick={() => toggleDeductFromPettyCash(txn.id, true, txn.transaction_item)}
-                                  className="p-1 rounded hover:bg-warning/10 text-warning transition-colors"
+                                  className="p-0.5 rounded hover:bg-warning/10 text-warning transition-colors"
                                   title="移至流水帳"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                  </svg>
-                                </button>
-                                )}
-                                {/* 上移按鈕 */}
-                                {canMoveUp && (
-                                <button
-                                  onClick={() => moveTransaction(txn, 'up', data)}
-                                  className="p-1 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
-                                  title="上移"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                  </svg>
-                                </button>
-                                )}
-                                {/* 下移按鈕 */}
-                                {canMoveDown && (
-                                <button
-                                  onClick={() => moveTransaction(txn, 'down', data)}
-                                  className="p-1 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
-                                  title="下移"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
                                 )}
