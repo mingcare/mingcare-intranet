@@ -1583,28 +1583,30 @@ export default function AccountingPage() {
                             </td>
                             <td className="px-1 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="inline-flex items-center gap-0.5">
-                                {/* 上移按鈕 */}
-                                <button
-                                  onClick={() => canMoveUp && moveTransaction(txn, 'up', data)}
-                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
-                                  title="上移"
-                                  style={{ visibility: canMoveUp ? 'visible' : 'hidden' }}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                  </svg>
-                                </button>
-                                {/* 下移按鈕 */}
-                                <button
-                                  onClick={() => canMoveDown && moveTransaction(txn, 'down', data)}
-                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
-                                  title="下移"
-                                  style={{ visibility: canMoveDown ? 'visible' : 'hidden' }}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </button>
+                                {/* 上移按鈕 - 只有當 canMoveUp 為 true 時才渲染 */}
+                                {canMoveUp && (
+                                  <button
+                                    onClick={() => moveTransaction(txn, 'up', data)}
+                                    className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                    title="上移"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {/* 下移按鈕 - 只有當 canMoveDown 為 true 時才渲染 */}
+                                {canMoveDown && (
+                                  <button
+                                    onClick={() => moveTransaction(txn, 'down', data)}
+                                    className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                    title="下移"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => openEditModal(txn)}
                                   className="p-0.5 rounded hover:bg-primary/10 text-primary transition-colors"
