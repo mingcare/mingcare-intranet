@@ -1544,8 +1544,14 @@ export default function AccountingPage() {
                         // 判斷同一天是否有多筆交易（用於顯示排序按鈕）
                         const sameDayTxns = data.filter(t => t.transaction_date === txn.transaction_date)
                         const sameDayIndex = sameDayTxns.findIndex(t => t.id === txn.id)
-                        const canMoveUp = sameDayTxns.length > 1 && sameDayIndex > 0
-                        const canMoveDown = sameDayTxns.length > 1 && sameDayIndex < sameDayTxns.length - 1
+                        const isFirstOfDay = sameDayIndex === 0
+                        const isLastOfDay = sameDayIndex === sameDayTxns.length - 1
+                        const canMoveUp = sameDayTxns.length > 1 && !isFirstOfDay
+                        const canMoveDown = sameDayTxns.length > 1 && !isLastOfDay
+                        // Debug: 22/01/2026 交易
+                        if (txn.transaction_date === '2026-01-22') {
+                          console.log('22/01:', txn.journal_number, 'idx:', sameDayIndex, 'of', sameDayTxns.length, 'first:', isFirstOfDay, 'last:', isLastOfDay, 'canUp:', canMoveUp, 'canDown:', canMoveDown)
+                        }
                         return (
                           <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
