@@ -1396,7 +1396,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">收入</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-28">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-32">操作</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-48">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1525,7 +1525,7 @@ export default function AccountingPage() {
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">補充</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">支出</th>
                       <th className="px-3 py-2 text-right font-semibold text-text-secondary w-24">餘額</th>
-                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-32">操作</th>
+                      <th className="px-3 py-2 text-center font-semibold text-text-secondary w-48">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1548,10 +1548,6 @@ export default function AccountingPage() {
                         const isLastOfDay = sameDayIndex === sameDayTxns.length - 1
                         const canMoveUp = sameDayTxns.length > 1 && !isFirstOfDay
                         const canMoveDown = sameDayTxns.length > 1 && !isLastOfDay
-                        // Debug: 22/01/2026 交易
-                        if (txn.transaction_date === '2026-01-22') {
-                          console.log('22/01:', txn.journal_number, 'idx:', sameDayIndex, 'of', sameDayTxns.length, 'first:', isFirstOfDay, 'last:', isLastOfDay, 'canUp:', canMoveUp, 'canDown:', canMoveDown)
-                        }
                         return (
                           <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
@@ -1586,7 +1582,7 @@ export default function AccountingPage() {
                               {formatCurrency(runningBalance)}
                             </td>
                             <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
                                 <button
                                   onClick={() => openEditModal(txn)}
                                   className="p-1.5 rounded hover:bg-primary/10 text-primary transition-colors"
