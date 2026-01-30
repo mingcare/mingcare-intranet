@@ -1583,30 +1583,26 @@ export default function AccountingPage() {
                             </td>
                             <td className="px-1 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="inline-flex items-center gap-0.5">
-                                {/* 上移按鈕 */}
-                                {canMoveUp ? (
+                                {/* 上移按鈕 - 始終渲染，用 invisible 隱藏 */}
                                 <button
-                                  onClick={() => moveTransaction(txn, 'up', data)}
-                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  onClick={() => canMoveUp && moveTransaction(txn, 'up', data)}
+                                  className={`p-0.5 rounded transition-colors ${canMoveUp ? 'hover:bg-purple-500/10 text-purple-500 cursor-pointer' : 'invisible'}`}
                                   title="上移"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                   </svg>
                                 </button>
-                                ) : <span className="w-4" />}
-                                {/* 下移按鈕 */}
-                                {canMoveDown ? (
+                                {/* 下移按鈕 - 始終渲染，用 invisible 隱藏 */}
                                 <button
-                                  onClick={() => moveTransaction(txn, 'down', data)}
-                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
+                                  onClick={() => canMoveDown && moveTransaction(txn, 'down', data)}
+                                  className={`p-0.5 rounded transition-colors ${canMoveDown ? 'hover:bg-purple-500/10 text-purple-500 cursor-pointer' : 'invisible'}`}
                                   title="下移"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
-                                ) : <span className="w-4" />}
                                 <button
                                   onClick={() => openEditModal(txn)}
                                   className="p-0.5 rounded hover:bg-primary/10 text-primary transition-colors"
