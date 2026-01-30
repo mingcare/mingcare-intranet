@@ -1548,10 +1548,6 @@ export default function AccountingPage() {
                         const isLastOfDay = sameDayIndex === sameDayTxns.length - 1
                         const canMoveUp = sameDayTxns.length > 1 && !isFirstOfDay
                         const canMoveDown = sameDayTxns.length > 1 && !isLastOfDay
-                        // Debug
-                        if (txn.transaction_date === '2026-01-05') {
-                          console.log(`05/01: ${txn.journal_number} idx=${sameDayIndex}/${sameDayTxns.length} first=${isFirstOfDay} last=${isLastOfDay} UP=${canMoveUp} DOWN=${canMoveDown}`)
-                        }
                         return (
                           <tr key={txn.id} className={`hover:bg-bg-secondary/50 cursor-pointer ${isReplenishment ? 'bg-green-50 dark:bg-green-900/10' : ''}`} onClick={() => openEditModal(txn)}>
                             <td className="px-3 py-2 text-primary font-mono text-xs">
@@ -1587,21 +1583,23 @@ export default function AccountingPage() {
                             </td>
                             <td className="px-1 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="inline-flex items-center gap-0.5">
-                                {/* 上移按鈕 - 始終渲染，用 invisible 隱藏 */}
+                                {/* 上移按鈕 */}
                                 <button
                                   onClick={() => canMoveUp && moveTransaction(txn, 'up', data)}
-                                  className={`p-0.5 rounded transition-colors ${canMoveUp ? 'hover:bg-purple-500/10 text-purple-500 cursor-pointer' : 'invisible'}`}
+                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
                                   title="上移"
+                                  style={{ visibility: canMoveUp ? 'visible' : 'hidden' }}
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                                   </svg>
                                 </button>
-                                {/* 下移按鈕 - 始終渲染，用 invisible 隱藏 */}
+                                {/* 下移按鈕 */}
                                 <button
                                   onClick={() => canMoveDown && moveTransaction(txn, 'down', data)}
-                                  className={`p-0.5 rounded transition-colors ${canMoveDown ? 'hover:bg-purple-500/10 text-purple-500 cursor-pointer' : 'invisible'}`}
+                                  className="p-0.5 rounded hover:bg-purple-500/10 text-purple-500 transition-colors"
                                   title="下移"
+                                  style={{ visibility: canMoveDown ? 'visible' : 'hidden' }}
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
