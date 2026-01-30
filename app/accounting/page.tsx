@@ -337,13 +337,18 @@ export default function AccountingPage() {
   // 篩選流水帳交易：
   // 1. 銀行轉賬（所有，包括 Petty Cash 補充）
   // 2. 付款方式為空的記錄（顯示在流水帳以免遺漏）
-  // 3. 所有現金交易（包括從零用金扣除的支出）
+  // 3. 現金交易（僅不從零用金扣除的支出）
   const getLedgerTransactions = () => {
-    let filtered = transactions.filter(t => 
-      t.payment_method === '銀行轉賬' ||
-      !t.payment_method ||  // 付款方式為空的顯示在流水帳
-      t.payment_method === '現金'  // 所有現金交易都顯示在流水帳
-    )
+    let filtered = transactions.filter(t => {
+      const paymentMethod = (t.payment_method || '').trim()
+      const isCashPayment = paymentMethod === '現金'
+
+      return (
+        paymentMethod === '銀行轉賬' ||
+        !paymentMethod || // 付款方式為空的顯示在流水帳
+        (isCashPayment && t.deduct_from_petty_cash === false)
+      )
+    })
 
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(t => getMonthFromDate(t.transaction_date) === selectedMonth)
@@ -380,19 +385,16 @@ export default function AccountingPage() {
   const getPettyCashTransactions = () => {
     let filtered = transactions.filter(t => {
       const paymentMethod = (t.payment_method || '').trim()
-      const isCashPayment = paymentMethod === '現金'
-      const isExplicitPettyCash = t.deduct_from_petty_cash === true
+      const isCashOrMissing = paymentMethod === '現金' || !paymentMethod
 
       return (
         // 排除系統調整（不在表格顯示）
         !isSystemAdjustment(t) &&
         (
-          // 明確標記從零用金扣除
-          isExplicitPettyCash ||
-          // 現金交易（排除已標記不從零用金扣除的）
-          (isCashPayment && t.deduct_from_petty_cash !== false) ||
-          // 或者是 Petty Cash 補充交易
-          isPettyCashReplenishment(t)
+          // Petty Cash 補充交易
+          isPettyCashReplenishment(t) ||
+          // 現金/未填付款方式且從零用金扣除
+          (isCashOrMissing && t.deduct_from_petty_cash !== false)
         )
       )
     })
