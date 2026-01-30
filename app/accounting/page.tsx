@@ -77,7 +77,9 @@ export default function AccountingPage() {
   const [isCreating, setIsCreating] = useState(false)  // 標記是新增還是編輯
   const [billingYear, setBillingYear] = useState<number>(new Date().getFullYear())
   const [billingMonthNum, setBillingMonthNum] = useState<number>(new Date().getMonth() + 1)
-  const [transactionType, setTransactionType] = useState<'income' | 'expense' | null>(null)  // 收入或支出類型
+  const [transactionType, setTransactionType] = useState<'income' | 'expense' | 'internal_transfer' | null>(null)  // 收入、支出或內部轉帳
+  const [internalTransferDirection, setInternalTransferDirection] = useState<'savings_to_current' | 'current_to_savings'>('savings_to_current')  // 內部轉帳方向
+  const [internalTransferAmount, setInternalTransferAmount] = useState<number>(0)  // 內部轉帳金額
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<FinancialTransaction | null>(null)
   const [currentUser, setCurrentUser] = useState<string>('')
@@ -89,7 +91,7 @@ export default function AccountingPage() {
     journalNumber: string
     billingYear: number
     billingMonthNum: number
-    transactionType: 'income' | 'expense'
+    transactionType: 'income' | 'expense' | 'internal_transfer'
     data: FinancialTransaction
   }>>([])
   const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null)  // 正在編輯的待提交項目索引
@@ -370,11 +372,21 @@ export default function AccountingPage() {
 
       // 戶口類型篩選
       if (accountType === 'savings') {
-        // 儲蓄戶口：銀行轉賬、FPS、Payme（非支票）
-        return paymentMethod !== '支票'
+        // 儲蓄戶口：銀行轉賬、FPS、Payme + 支票收入（收到的支票存入儲蓄戶口）
+        // 排除支票支出（從支票戶口出）
+        if (paymentMethod === '支票') {
+          // 支票收入（income_amount > 0）入儲蓄戶口
+          // 支票支出（expense_amount > 0）從支票戶口出，不在儲蓄戶口顯示
+          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0)
+        }
+        return true // 銀行轉賬等其他付款方式
       } else if (accountType === 'current') {
-        // 支票戶口：只顯示支票交易
-        return paymentMethod === '支票'
+        // 支票戶口：支票支出 + 內部轉帳收入
+        if (paymentMethod === '支票') {
+          // 支票支出（expense_amount > 0）+ 內部轉帳收入
+          return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
+        }
+        return false // 只顯示支票交易
       }
 
       return true // accountType === 'all'
@@ -709,12 +721,23 @@ export default function AccountingPage() {
       alert('請選擇交易日期')
       return false
     }
-    if (!editingTransaction.payment_method) {
-      alert('請選擇付款方式')
+    if (!transactionType) {
+      alert('請選擇交易類型（收入、支出或內部轉帳）')
       return false
     }
-    if (!transactionType) {
-      alert('請選擇交易類型（收入或支出）')
+    
+    // 內部轉帳驗證
+    if (transactionType === 'internal_transfer') {
+      if (internalTransferAmount <= 0) {
+        alert('請輸入內部轉帳金額')
+        return false
+      }
+      return true
+    }
+    
+    // 一般交易驗證
+    if (!editingTransaction.payment_method) {
+      alert('請選擇付款方式')
       return false
     }
     if (transactionType === 'income' && (!editingTransaction.income_category || editingTransaction.income_amount === 0)) {
@@ -940,6 +963,145 @@ export default function AccountingPage() {
     // 使用選擇的 billingYear 和 billingMonthNum
     const billingMonth = `${billingYear}年${billingMonthNum}月`
     
+    // 內部轉帳：創建兩筆記錄
+    if (transactionType === 'internal_transfer') {
+      try {
+        // 獲取當前流水號
+        const currentJournalNum = parseInt(editingTransaction.journal_number, 10)
+        const journalNumber1 = String(currentJournalNum).padStart(8, '0')
+        const journalNumber2 = String(currentJournalNum + 1).padStart(8, '0')
+        
+        let record1, record2
+        
+        if (internalTransferDirection === 'savings_to_current') {
+          // 儲蓄 → 支票
+          record1 = {
+            journal_number: journalNumber1,
+            transaction_code: '',
+            fiscal_year: billingYear,
+            billing_month: billingMonth,
+            transaction_date: editingTransaction.transaction_date,
+            transaction_item: `內部轉帳 - 轉到支票戶口 | ${editingTransaction.transaction_item}`,
+            payment_method: '銀行轉賬',
+            income_category: null,
+            income_amount: 0,
+            expense_category: '內部轉帳',
+            expense_amount: internalTransferAmount,
+            handler: editingTransaction.handler,
+            notes: '儲蓄戶口 002113176 → 支票戶口 002520252',
+            deduct_from_petty_cash: false,
+            created_by: currentUser,
+            is_deleted: false
+          }
+          record2 = {
+            journal_number: journalNumber2,
+            transaction_code: '',
+            fiscal_year: billingYear,
+            billing_month: billingMonth,
+            transaction_date: editingTransaction.transaction_date,
+            transaction_item: `內部轉帳 - 從儲蓄戶口轉入 | ${editingTransaction.transaction_item}`,
+            payment_method: '支票',
+            income_category: '內部轉帳',
+            income_amount: internalTransferAmount,
+            expense_category: null,
+            expense_amount: 0,
+            handler: editingTransaction.handler,
+            notes: '儲蓄戶口 002113176 → 支票戶口 002520252',
+            deduct_from_petty_cash: false,
+            created_by: currentUser,
+            is_deleted: false
+          }
+        } else {
+          // 支票 → 儲蓄
+          record1 = {
+            journal_number: journalNumber1,
+            transaction_code: '',
+            fiscal_year: billingYear,
+            billing_month: billingMonth,
+            transaction_date: editingTransaction.transaction_date,
+            transaction_item: `內部轉帳 - 轉到儲蓄戶口 | ${editingTransaction.transaction_item}`,
+            payment_method: '支票',
+            income_category: null,
+            income_amount: 0,
+            expense_category: '內部轉帳',
+            expense_amount: internalTransferAmount,
+            handler: editingTransaction.handler,
+            notes: '支票戶口 002520252 → 儲蓄戶口 002113176',
+            deduct_from_petty_cash: false,
+            created_by: currentUser,
+            is_deleted: false
+          }
+          record2 = {
+            journal_number: journalNumber2,
+            transaction_code: '',
+            fiscal_year: billingYear,
+            billing_month: billingMonth,
+            transaction_date: editingTransaction.transaction_date,
+            transaction_item: `內部轉帳 - 從支票戶口轉入 | ${editingTransaction.transaction_item}`,
+            payment_method: '銀行轉賬',
+            income_category: '內部轉帳',
+            income_amount: internalTransferAmount,
+            expense_category: null,
+            expense_amount: 0,
+            handler: editingTransaction.handler,
+            notes: '支票戶口 002520252 → 儲蓄戶口 002113176',
+            deduct_from_petty_cash: false,
+            created_by: currentUser,
+            is_deleted: false
+          }
+        }
+        
+        // 插入兩筆記錄
+        const { data, error } = await supabase
+          .from('financial_transactions')
+          .insert([record1, record2])
+          .select()
+        
+        if (error) {
+          console.error('Error creating internal transfer:', error)
+          alert('內部轉帳新增失敗: ' + error.message)
+          setSaving(false)
+          return
+        }
+        
+        // 更新流水號序列
+        await supabase
+          .from('global_journal_sequence')
+          .update({ last_number: currentJournalNum + 1 })
+          .eq('id', 1)
+        
+        // 記錄審計日誌
+        if (data && data.length > 0) {
+          const auditLogs = data.map((txn: any) => ({
+            transaction_id: txn.id,
+            journal_number: txn.journal_number,
+            action_type: 'create',
+            changed_fields: ['all'],
+            old_values: {},
+            new_values: txn,
+            performed_by: currentUser
+          }))
+          await supabase.from('financial_audit_log').insert(auditLogs)
+        }
+        
+        setShowEditModal(false)
+        setIsCreating(false)
+        setSaving(false)
+        setInternalTransferAmount(0)
+        setPendingTransactions([])
+        fetchTransactions()
+        fetchPettyCashHistoricalBalance()
+        alert('內部轉帳成功！已創建兩筆記錄。')
+        return
+      } catch (err) {
+        console.error('Error:', err)
+        alert('內部轉帳失敗')
+        setSaving(false)
+        return
+      }
+    }
+    
+    // 一般交易：創建單筆記錄
     const { data, error } = await supabase
       .from('financial_transactions')
       .insert({
@@ -1411,7 +1573,7 @@ export default function AccountingPage() {
             </div>
             <div className={`card-apple bg-gradient-to-br ${ledgerStats.net >= 0 ? 'from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20' : 'from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20'}`}>
               <div className="card-apple-content text-center">
-                <p className={`text-xs mb-1 ${ledgerStats.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>淨額</p>
+                <p className={`text-xs mb-1 ${ledgerStats.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>本期收支</p>
                 <p className={`text-xl font-bold ${ledgerStats.net >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-orange-700 dark:text-orange-300'}`}>{formatCurrency(ledgerStats.net)}</p>
               </div>
             </div>
@@ -1597,6 +1759,46 @@ export default function AccountingPage() {
                 <div className="text-center py-12 text-text-tertiary">
                   <span className="text-4xl mb-4 block">🏦</span>
                   <p>暫無流水帳記錄</p>
+                </div>
+              )}
+              {/* 餘額計算說明 */}
+              {getLedgerTransactions().length > 0 && (
+                <div className="px-4 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-t border-border-light">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-6 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-text-tertiary">期初餘額:</span>
+                        <span className="font-mono font-bold text-blue-700 dark:text-blue-300">
+                          {formatCurrency(accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-text-tertiary">
+                        <span>+</span>
+                        <span className="text-success font-medium">收入 {formatCurrency(ledgerStats.totalIncome)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-text-tertiary">
+                        <span>−</span>
+                        <span className="text-error font-medium">支出 {formatCurrency(ledgerStats.totalExpense)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-text-tertiary">
+                        <span>=</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+                      <span className="text-text-secondary font-medium">期末餘額:</span>
+                      <span className={`font-mono text-xl font-bold ${((accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE) + ledgerStats.net) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                        {formatCurrency((accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE) + ledgerStats.net)}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-text-tertiary mt-2">
+                    {accountType === 'current' 
+                      ? '📝 支票戶口 = 期初餘額 $1,086.54 + 內部轉帳收入 − 支票支出'
+                      : accountType === 'savings'
+                      ? '📝 儲蓄戶口 = 期初餘額 $82,755.59 + 銀行轉賬/FPS/Payme/支票收入 − 銀行轉賬支出'
+                      : '📝 全部戶口 = 期初餘額 $82,755.59 + 所有收入 − 所有支出'
+                    }
+                  </p>
                 </div>
               )}
             </div>
@@ -1918,7 +2120,7 @@ export default function AccountingPage() {
               {/* 交易類型選擇 - 更醒目的設計 */}
               <div>
                 <label className="block text-xs font-medium text-text-tertiary mb-2">交易類型 <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -1936,7 +2138,7 @@ export default function AccountingPage() {
                     }`}
                   >
                     <span className="text-2xl">💰</span>
-                    <span className={`font-semibold ${transactionType === 'income' ? 'text-green-600 dark:text-green-400' : 'text-text-secondary'}`}>收入</span>
+                    <span className={`font-semibold text-sm ${transactionType === 'income' ? 'text-green-600 dark:text-green-400' : 'text-text-secondary'}`}>收入</span>
                   </button>
                   <button
                     type="button"
@@ -1955,10 +2157,103 @@ export default function AccountingPage() {
                     }`}
                   >
                     <span className="text-2xl">💸</span>
-                    <span className={`font-semibold ${transactionType === 'expense' ? 'text-red-600 dark:text-red-400' : 'text-text-secondary'}`}>支出</span>
+                    <span className={`font-semibold text-sm ${transactionType === 'expense' ? 'text-red-600 dark:text-red-400' : 'text-text-secondary'}`}>支出</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransactionType('internal_transfer')
+                      setEditingTransaction({
+                        ...editingTransaction,
+                        income_category: '內部轉帳',
+                        expense_category: '內部轉帳',
+                        income_amount: 0,
+                        expense_amount: 0
+                      })
+                    }}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                      transactionType === 'internal_transfer'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
+                    }`}
+                  >
+                    <span className="text-2xl">🔄</span>
+                    <span className={`font-semibold text-sm ${transactionType === 'internal_transfer' ? 'text-blue-600 dark:text-blue-400' : 'text-text-secondary'}`}>內部轉帳</span>
                   </button>
                 </div>
               </div>
+
+              {/* 內部轉帳詳情 */}
+              {transactionType === 'internal_transfer' && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 space-y-4">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                    <span>🔄</span>
+                    <span className="font-medium">內部轉帳詳情</span>
+                  </div>
+                  
+                  {/* 轉帳方向 */}
+                  <div>
+                    <label className="block text-xs text-blue-600 dark:text-blue-400 mb-2">轉帳方向</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setInternalTransferDirection('savings_to_current')}
+                        className={`p-3 rounded-lg border transition-all text-sm ${
+                          internalTransferDirection === 'savings_to_current'
+                            ? 'border-blue-500 bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-300 dark:border-gray-600 text-text-secondary hover:border-blue-400'
+                        }`}
+                      >
+                        🏦 儲蓄 → 📝 支票
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInternalTransferDirection('current_to_savings')}
+                        className={`p-3 rounded-lg border transition-all text-sm ${
+                          internalTransferDirection === 'current_to_savings'
+                            ? 'border-blue-500 bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-300 dark:border-gray-600 text-text-secondary hover:border-blue-400'
+                        }`}
+                      >
+                        📝 支票 → 🏦 儲蓄
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 轉帳金額 */}
+                  <div>
+                    <label className="block text-xs text-blue-600 dark:text-blue-400 mb-1">轉帳金額 <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={internalTransferAmount || ''}
+                        onChange={(e) => setInternalTransferAmount(parseFloat(e.target.value) || 0)}
+                        className="input-apple w-full pl-7 bg-white dark:bg-gray-800"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 轉帳說明 */}
+                  <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg">
+                    <p className="font-medium mb-1">⚡ 系統將自動創建兩筆記錄：</p>
+                    {internalTransferDirection === 'savings_to_current' ? (
+                      <ul className="space-y-1 ml-4">
+                        <li>• 儲蓄戶口：支出 ${internalTransferAmount.toLocaleString()}</li>
+                        <li>• 支票戶口：收入 ${internalTransferAmount.toLocaleString()}</li>
+                      </ul>
+                    ) : (
+                      <ul className="space-y-1 ml-4">
+                        <li>• 支票戶口：支出 ${internalTransferAmount.toLocaleString()}</li>
+                        <li>• 儲蓄戶口：收入 ${internalTransferAmount.toLocaleString()}</li>
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 收入詳情 */}
               {transactionType === 'income' && (
