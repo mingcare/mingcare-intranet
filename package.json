@@ -5,12 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:local": "rm -rf .next out && cp next.config.local.js next.config.js && next build && git checkout next.config.js",
+    "build:local": "rm -rf .next out && DEPLOY_TARGET=local next build",
     "start": "next start",
     "lint": "next lint",
     "export": "next build",
     "build:hostinger": "rm -rf .next && NODE_ENV=production next build",
-    "build:github": "rm -rf .next && cp next.config.github-pages.js next.config.js && next build && git checkout next.config.js",
+    "build:github": "rm -rf .next && DEPLOY_TARGET=github next build",
     "deploy:hostinger": "npm run build:hostinger && npm run start",
     "deploy": "npm run build:github",
     "clean": "rm -rf .next out node_modules/.cache"
@@ -39,6 +39,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^8.0.0",
     "eslint-config-next": "^14.0.0",
     "typescript": "^5.0.0"

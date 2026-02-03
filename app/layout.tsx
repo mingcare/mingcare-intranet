@@ -1,9 +1,5 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
 import type { Viewport } from 'next'
-import GlobalSweetMessage from '../components/GlobalSweetMessage'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: '明家居家護理服務 - Intranet',
@@ -31,9 +27,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="theme-color" content="#ffffff" />
       </head>
-      <body className={`${inter.className} mobile-friendly antialiased`}>
+      <body className="mobile-friendly antialiased">
         {children}
-        <GlobalSweetMessage />
       </body>
     </html>
   )

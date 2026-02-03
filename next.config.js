@@ -1,14 +1,24 @@
 /** @type {import('next').NextConfig} */
+const isGithubPages =
+  process.env.DEPLOY_TARGET === 'github' || process.env.GITHUB_PAGES === 'true'
+
+if (process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line no-console
+  console.log('[next.config] isGithubPages:', isGithubPages)
+}
+
 const nextConfig = {
-  // GitHub Pages static export configuration
-  output: 'export',
   trailingSlash: true,
   images: {
     unoptimized: true
   },
-  // GitHub Pages configuration
-  basePath: '/mingcare-intranet',
-  assetPrefix: '/mingcare-intranet/',
+  ...(isGithubPages
+    ? {
+        output: 'export',
+        basePath: '/mingcare-intranet',
+        assetPrefix: '/mingcare-intranet/',
+      }
+    : {}),
   experimental: {
     missingSuspenseWithCSRBailout: false,
   },

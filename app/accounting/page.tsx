@@ -374,10 +374,10 @@ export default function AccountingPage() {
       if (accountType === 'savings') {
         // 儲蓄戶口：銀行轉賬、FPS、Payme + 支票收入（收到的支票存入儲蓄戶口）
         // 排除支票支出（從支票戶口出）
+        // 排除內部轉帳收入（那是轉入支票戶口的）
         if (paymentMethod === '支票') {
-          // 支票收入（income_amount > 0）入儲蓄戶口
-          // 支票支出（expense_amount > 0）從支票戶口出，不在儲蓄戶口顯示
-          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0)
+          // 支票收入（income_amount > 0）入儲蓄戶口，但排除內部轉帳
+          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
         }
         return true // 銀行轉賬等其他付款方式
       } else if (accountType === 'current') {
@@ -1573,7 +1573,7 @@ export default function AccountingPage() {
             </div>
             <div className={`card-apple bg-gradient-to-br ${ledgerStats.net >= 0 ? 'from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20' : 'from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20'}`}>
               <div className="card-apple-content text-center">
-                <p className={`text-xs mb-1 ${ledgerStats.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>本期收支</p>
+                <p className={`text-xs mb-1 ${ledgerStats.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>餘額</p>
                 <p className={`text-xl font-bold ${ledgerStats.net >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-orange-700 dark:text-orange-300'}`}>{formatCurrency(ledgerStats.net)}</p>
               </div>
             </div>
