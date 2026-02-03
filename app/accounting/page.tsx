@@ -51,7 +51,7 @@ interface CategoryOption {
 }
 
 type ViewMode = 'ledger' | 'petty_cash'
-type AccountType = 'all' | 'savings' | 'current'  // 儲蓄戶口 / 支票戶口
+type AccountType = 'savings' | 'current'  // 儲蓄戶口 / 支票戶口
 
 const DISPLAY_START_DATE = '2025-04-01'
 const DISPLAY_START_MONTH = '2025-04'
@@ -68,7 +68,7 @@ export default function AccountingPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('ledger')
-  const [accountType, setAccountType] = useState<AccountType>('all')  // 戶口類型篩選
+  const [accountType, setAccountType] = useState<AccountType>('savings')  // 戶口類型篩選
   const [showExcludedModal, setShowExcludedModal] = useState(false)
   
   // 編輯相關狀態
@@ -372,18 +372,38 @@ export default function AccountingPage() {
 
       // 戶口類型篩選
       if (accountType === 'savings') {
-        // 儲蓄戶口：銀行轉賬、FPS、Payme + 支票收入（收到的支票存入儲蓄戶口）
-        // 排除支票支出（從支票戶口出）
-        // 排除內部轉帳收入（那是轉入支票戶口的）
+        // ============================================================
+        // 儲蓄戶口 (Savings Account 002113176)
+        // ============================================================
+        // 顯示：
+        //   1. 銀行轉賬收入/支出 (payment_method='銀行轉賬')
+        //   2. 支票收入 (payment_method='支票', income_amount > 0)
+        //      - 但排除轉入支票戶口嘅內部轉帳
+        //
+        // 內部轉帳處理：
+        //   - 正向 (Savings→Current): expense_category='內部轉帳', payment_method='銀行轉賬' → 顯示
+        //   - 反向 (Current→Savings): income_category='內部轉帳', payment_method='銀行轉賬' → 顯示
+        // ============================================================
         if (paymentMethod === '支票') {
-          // 支票收入（income_amount > 0）入儲蓄戶口，但排除內部轉帳
+          // 支票收入入儲蓄戶口，但排除轉入支票戶口嘅內部轉帳
           return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
         }
-        return true // 銀行轉賬等其他付款方式
+        // 銀行轉賬：全部顯示（包括正向/反向內部轉帳）
+        return paymentMethod === '銀行轉賬'
       } else if (accountType === 'current') {
-        // 支票戶口：支票支出 + 內部轉帳收入
+        // ============================================================
+        // 支票戶口 (Current Account 002520252)
+        // ============================================================
+        // 顯示：
+        //   1. 支票支出 (payment_method='支票', expense_amount > 0)
+        //   2. 內部轉帳收入 (payment_method='支票', income_category='內部轉帳')
+        //
+        // 內部轉帳處理：
+        //   - 正向 (Savings→Current): income_category='內部轉帳', payment_method='支票' → 顯示
+        //   - 反向 (Current→Savings): expense_category='內部轉帳', payment_method='支票' → 顯示
+        // ============================================================
         if (paymentMethod === '支票') {
-          // 支票支出（expense_amount > 0）+ 內部轉帳收入
+          // 支票支出 + 內部轉帳收入 + 反向內部轉帳支出
           return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
         }
         return false // 只顯示支票交易
@@ -408,6 +428,59 @@ export default function AccountingPage() {
     }
 
     return filtered
+  }
+
+  // 計算儲蓄戶口/支票戶口的動態期初餘額
+  // 期初餘額 = 基礎期初 + 所選月份之前所有月份的交易淨值
+  const getLedgerOpeningBalance = () => {
+    const baseOpeningBalance = accountType === 'current' 
+      ? CHEQUE_ACCOUNT_OPENING_BALANCE 
+      : LEDGER_OPENING_BALANCE
+    
+    // 如果選擇「全部」或「2025-04」，直接返回基礎期初餘額
+    if (selectedMonth === 'all' || selectedMonth <= DISPLAY_START_MONTH) {
+      return baseOpeningBalance
+    }
+    
+    // 計算所選月份之前所有交易的淨值
+    const priorTransactions = transactions.filter(t => {
+      const txnMonth = getMonthFromDate(t.transaction_date)
+      if (txnMonth >= selectedMonth || txnMonth < DISPLAY_START_MONTH) return false
+      
+      const paymentMethod = (t.payment_method || '').trim()
+      const isCashPayment = paymentMethod === '現金'
+      
+      // 基本篩選（與 getLedgerTransactions 相同邏輯）
+      const isLedgerTransaction = (
+        paymentMethod === '銀行轉賬' ||
+        paymentMethod === '支票' ||
+        !paymentMethod ||
+        (isCashPayment && t.deduct_from_petty_cash === false)
+      )
+      
+      if (!isLedgerTransaction) return false
+      
+      // 戶口類型篩選
+      if (accountType === 'savings') {
+        if (paymentMethod === '支票') {
+          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
+        }
+        return paymentMethod === '銀行轉賬'
+      } else if (accountType === 'current') {
+        if (paymentMethod === '支票') {
+          return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
+        }
+        return false
+      }
+      
+      return true
+    })
+    
+    const priorNetChange = priorTransactions.reduce((sum, t) => {
+      return sum + (t.income_amount || 0) - (t.expense_amount || 0)
+    }, 0)
+    
+    return baseOpeningBalance + priorNetChange
   }
 
   // 判斷是否為零用金補充交易（expense_category = 'Petty Cash'）
@@ -1468,16 +1541,6 @@ export default function AccountingPage() {
         {viewMode === 'ledger' && (
           <div className="flex gap-2 p-1 bg-bg-secondary rounded-xl">
             <button
-              onClick={() => setAccountType('all')}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                accountType === 'all'
-                  ? 'bg-white dark:bg-fill-tertiary text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              全部戶口
-            </button>
-            <button
               onClick={() => setAccountType('savings')}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                 accountType === 'savings'
@@ -1522,7 +1585,7 @@ export default function AccountingPage() {
 
               {/* 月份選擇 */}
               <div className="flex-1 min-w-[140px]">
-                <label className="block text-xs font-medium text-text-secondary mb-1">月份（按交易日期）</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">月份</label>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
@@ -1530,7 +1593,7 @@ export default function AccountingPage() {
                 >
                   <option value="all">全年</option>
                   {getAvailableMonths().map(month => (
-                    <option key={month} value={month}>{formatMonth(month)}</option>
+                    <option key={month} value={month}>{parseInt(month.split('-')[1])}月</option>
                   ))}
                 </select>
               </div>
@@ -1630,9 +1693,9 @@ export default function AccountingPage() {
                 </h3>
                 <p className="text-xs text-text-tertiary mt-1">
                   {accountType === 'current' 
-                    ? '支票交易記錄（期初餘額：$1,086.54）' 
+                    ? `支票交易記錄（期初餘額：${formatCurrency(getLedgerOpeningBalance())}）` 
                     : accountType === 'savings'
-                    ? '銀行轉賬及非零用金現金支出（期初餘額：$82,755.59）'
+                    ? `銀行轉賬及非零用金現金支出（期初餘額：${formatCurrency(getLedgerOpeningBalance())}）`
                     : '銀行轉賬、支票及非零用金現金支出'}
                 </p>
               </div>
@@ -1652,15 +1715,9 @@ export default function AccountingPage() {
                   </thead>
                   <tbody className="divide-y divide-border-light">
                     {(() => {
-                      // 根據戶口類型選擇對應的期初餘額
-                      const getOpeningBalance = () => {
-                        if (accountType === 'current') {
-                          return CHEQUE_ACCOUNT_OPENING_BALANCE  // 支票戶口期初餘額
-                        }
-                        return LEDGER_OPENING_BALANCE  // 儲蓄戶口或全部
-                      }
+                      // 使用動態計算的期初餘額
                       const ledgerOpeningBalance = (selectedMonth === 'all' || selectedMonth >= DISPLAY_START_MONTH)
-                        ? getOpeningBalance()
+                        ? getLedgerOpeningBalance()
                         : 0
                       let runningBalance = ledgerOpeningBalance
                       const data = getLedgerTransactions()
@@ -1769,7 +1826,7 @@ export default function AccountingPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-text-tertiary">期初餘額:</span>
                         <span className="font-mono font-bold text-blue-700 dark:text-blue-300">
-                          {formatCurrency(accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE)}
+                          {formatCurrency(getLedgerOpeningBalance())}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 text-text-tertiary">
@@ -1786,17 +1843,15 @@ export default function AccountingPage() {
                     </div>
                     <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                       <span className="text-text-secondary font-medium">期末餘額:</span>
-                      <span className={`font-mono text-xl font-bold ${((accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE) + ledgerStats.net) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                        {formatCurrency((accountType === 'current' ? CHEQUE_ACCOUNT_OPENING_BALANCE : LEDGER_OPENING_BALANCE) + ledgerStats.net)}
+                      <span className={`font-mono text-xl font-bold ${(getLedgerOpeningBalance() + ledgerStats.net) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                        {formatCurrency(getLedgerOpeningBalance() + ledgerStats.net)}
                       </span>
                     </div>
                   </div>
                   <p className="text-xs text-text-tertiary mt-2">
                     {accountType === 'current' 
-                      ? '📝 支票戶口 = 期初餘額 $1,086.54 + 內部轉帳收入 − 支票支出'
-                      : accountType === 'savings'
-                      ? '📝 儲蓄戶口 = 期初餘額 $82,755.59 + 銀行轉賬/FPS/Payme/支票收入 − 銀行轉賬支出'
-                      : '📝 全部戶口 = 期初餘額 $82,755.59 + 所有收入 − 所有支出'
+                      ? `📝 支票戶口 = 期初餘額 ${formatCurrency(getLedgerOpeningBalance())} + 內部轉帳收入 − 支票支出`
+                      : `📝 儲蓄戶口 = 期初餘額 ${formatCurrency(getLedgerOpeningBalance())} + 銀行轉賬/FPS/Payme/支票收入 − 銀行轉賬支出`
                     }
                   </p>
                 </div>

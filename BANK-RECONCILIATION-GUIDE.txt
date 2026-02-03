@@ -1,0 +1,511 @@
+================================================================================
+明護 銀行對帳指南 - Bank Reconciliation Guide
+================================================================================
+更新日期: 2026-02-03
+
+================================================================================
+1. 系統架構
+================================================================================
+
+Supabase 數據項目:
+- URL: https://cvkxlvdicympakfecgvv.supabase.co
+- Anon Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2a3hsdmRpY3ltcGFrZmVjZ3Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0MjkxODEsImV4cCI6MjA2NzAwNTE4MX0.jp2fPKcBcG4-042UoN3OieR553WAgABhJIujiDJAt-I
+
+銀行戶口:
+- 儲蓄戶口 (Savings): 002113176
+- 支票戶口 (Current): 002520252
+
+銀行月結單存放位置:
+- /Users/joecheung/Documents/GitHub/mingcare-intranet/bank statement/
+
+================================================================================
+2. 對帳原則
+================================================================================
+
+✅ 核心原則：CLOSING BALANCE MUST MATCH
+- 只要期末餘額 match，就算 income/expense 明細有差異都 OK
+- 差異通常係 REV (reversal) 交易，銀行記錄但 DB 唔記錄，但會 net to zero
+
+✅ 唔好亂刪 record！
+- 刪除前一定要確認：
+  1. 係咪真係 duplicate
+  2. 用 ID 刪除，唔好用 journal_number（可能有唔同月份用同一個 number）
+  3. 加日期 filter 確保只刪目標月份
+
+================================================================================
+3. 儲蓄戶口 Filter Logic (Intranet)
+================================================================================
+
+Code location: /app/accounting/page.tsx (line 358-400)
+
+儲蓄戶口顯示以下交易：
+1. payment_method === '銀行轉賬' (全部)
+2. payment_method === '支票' AND income_amount > 0 AND expense_amount <= 0 AND income_category !== '內部轉帳'
+
+Intranet 實際 Code:
+```javascript
+// accountType === 'savings'
+if (paymentMethod === '支票') {
+  // 支票收入（income_amount > 0）入儲蓄戶口，但排除內部轉帳
+  return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
+}
+// 只顯示銀行轉賬，排除現金和空白付款方式
+return paymentMethod === '銀行轉賬'
+```
+
+簡化版 (for reconciliation scripts):
+```javascript
+const savingsTxns = transactions.filter(t => {
+  if (t.payment_method === '銀行轉賬') return true;
+  if (t.payment_method === '支票' && t.income_amount > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳') return true;
+  return false;
+});
+```
+
+================================================================================
+4. 支票戶口 Filter Logic (Intranet)
+================================================================================
+
+Code location: /app/accounting/page.tsx (line 388-394)
+
+支票戶口顯示以下交易：
+1. payment_method === '支票' AND expense_amount > 0
+2. payment_method === '支票' AND income_amount > 0 AND income_category === '內部轉帳'
+
+Intranet 實際 Code:
+```javascript
+// accountType === 'current'
+if (paymentMethod === '支票') {
+  // 支票支出（expense_amount > 0）+ 內部轉帳收入
+  return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
+}
+return false // 只顯示支票交易
+```
+
+簡化版 (for reconciliation scripts):
+```javascript
+const currentTxns = transactions.filter(t => {
+  if (t.payment_method === '支票' && t.expense_amount > 0) return true;
+  if (t.payment_method === '支票' && t.income_amount > 0 && t.income_category === '內部轉帳') return true;
+  return false;
+});
+```
+
+⚠️ 重要發現：
+- 支票戶口 income 只計 payment_method === '支票' 嘅記錄
+- 但內部轉帳記錄嘅 payment_method 係 '銀行轉賬' (從 Savings 轉出)
+- 所以 Current Account 永遠收唔到內部轉帳收入！
+
+⚠️ 問題：
+- 內部轉帳只記錄咗 Savings 嘅 expense (expense_category = '內部轉帳', payment_method = '銀行轉賬')
+- 冇記錄 Current 嘅對應 income (需要 income_category = '內部轉帳', payment_method = '支票')
+- 所以 Current Account 嘅 income 一直係 $0
+
+================================================================================
+5. 內部轉帳架構
+================================================================================
+
+內部轉帳有兩種方向，每種需要 2 筆記錄：
+
+【A. 正向轉帳：儲蓄戶口 → 支票戶口】(Savings → Current)
+─────────────────────────────────────
+儲蓄戶口 (轉出):
+   - journal_number: IT-MONTH-XXX (例: IT-SEP-001)
+   - payment_method: 銀行轉賬
+   - expense_amount: 轉帳金額
+   - expense_category: 內部轉帳
+   - transaction_item: 內部轉賬：儲蓄戶口轉出至支票戶口
+
+支票戶口 (轉入):
+   - journal_number: IT-MONTH-XXX-IN (例: IT-SEP-001-IN)
+   - payment_method: 支票
+   - income_amount: 轉帳金額
+   - income_category: 內部轉帳
+   - transaction_item: 內部轉賬：支票戶口轉入自儲蓄戶口
+
+【B. 反向轉帳：支票戶口 → 儲蓄戶口】(Current → Savings)
+─────────────────────────────────────
+支票戶口 (轉出):
+   - journal_number: IT-MONTH-XXX (例: IT-SEP-004)
+   - payment_method: 支票
+   - expense_amount: 轉帳金額
+   - expense_category: 內部轉帳
+   - transaction_item: 內部轉賬：支票戶口轉出至儲蓄戶口 (反向)
+
+儲蓄戶口 (轉入):
+   - journal_number: IT-MONTH-XXX-IN (例: IT-SEP-004-IN)
+   - payment_method: 銀行轉賬
+   - income_amount: 轉帳金額
+   - income_category: 內部轉帳
+   - transaction_item: 內部轉賬：儲蓄戶口轉入自支票戶口 (反向)
+
+【Intranet Filter Logic 支援】
+─────────────────────────────
+儲蓄戶口 (savings view):
+  - 正向轉帳轉出: payment_method='銀行轉賬', expense_category='內部轉帳' → 顯示 ✓
+  - 反向轉帳轉入: payment_method='銀行轉賬', income_category='內部轉帳' → 顯示 ✓
+
+支票戶口 (current view):
+  - 正向轉帳轉入: payment_method='支票', income_category='內部轉帳' → 顯示 ✓
+  - 反向轉帳轉出: payment_method='支票', expense_category='內部轉帳' → 顯示 ✓
+
+================================================================================
+6. 期初餘額 (Opening Balance)
+================================================================================
+
+2025年4月期初：
+- 儲蓄戶口: $82,755.59
+- 支票戶口: $1,086.54
+
+Code location: /app/accounting/page.tsx
+- LEDGER_OPENING_BALANCE = 82755.59 (儲蓄)
+- CHEQUE_ACCOUNT_OPENING_BALANCE = 1086.54 (支票)
+
+================================================================================
+7. 已完成對帳月份
+================================================================================
+
+| 月份 | 儲蓄戶口 | 支票戶口 | 備註 |
+|------|----------|----------|------|
+| 2025-04 | ✅ $103,530.96 | ✅ $3,040.54 | REV 差異 acceptable |
+| 2025-05 | ✅ $41,078.53 | ✅ $3,420.54 | Perfect match |
+| 2025-06 | ✅ $70,815.21 | ✅ $5,187.04 | 已加內部轉帳收入 IT-00001837/38/39 |
+| 2025-07 | ✅ $132,221.77 | ✅ $18,147.04 | 已加內部轉帳 IT-JUL-001; 3張跨月支票已移去8月 |
+| 2025-08 | ✅ $114,671.46 | ✅ $652.04 | 已加內部轉帳 IT-AUG-001; 已加遺漏income INC-AUG-001 $2,470 |
+| 2025-09 | 待對 | 待對 | |
+| 2025-10 | 待對 | 待對 | |
+| 2025-11 | 待對 | 待對 | |
+| 2025-12 | 待對 | 待對 | |
+
+================================================================================
+8. Bank Statement Data (已提取)
+================================================================================
+
+儲蓄戶口 (002113176):
+| Month | Opening | Closing | Credit | Debit |
+|-------|---------|---------|--------|-------|
+| Apr-25 | $82,755.59 | $103,530.96 | | |
+| May-25 | $103,530.96 | $41,078.53 | | |
+| Jun-25 | $41,078.53 | $70,815.21 | $85,056.68 | $55,320.00 |
+| Jul-25 | $70,815.21 | $132,221.77 | | |
+| Aug-25 | $132,221.77 | $114,671.46 | | |
+| Sep-25 | $114,671.46 | $180,669.99 | | |
+| Oct-25 | $180,669.99 | $43,197.51 | | |
+| Nov-25 | $43,197.51 | $14,923.59 | | |
+| Dec-25 | $14,923.59 | $161,604.07 | | |
+
+支票戶口 (002520252):
+| Month | Opening | Closing | Credit | Debit |
+|-------|---------|---------|--------|-------|
+| Apr-25 | $1,086.54 | $3,040.54 | | |
+| May-25 | $3,040.54 | $3,420.54 | | |
+| Jun-25 | $3,420.54 | $5,187.04 | $72,500.00 | $70,733.50 |
+| Jul-25 | $5,187.04 | $18,147.04 | $22,255 | $9,295 |
+| Aug-25 | $18,147.04 | $652.04 | $8,490 | $25,985 |
+| Sep-25 | $652.04 | $1,492.04 | | |
+| Oct-25 | $1,492.04 | $3,332.04 | | |
+| Nov-25 | $3,332.04 | $20,987.04 | | |
+| Dec-25 | $20,987.04 | $1,757.04 | | |
+
+================================================================================
+9. 常用查詢 Scripts
+================================================================================
+
+查詢某月份所有交易:
+```javascript
+const { data } = await supabase.from('financial_transactions')
+  .select('*')
+  .gte('transaction_date', '2025-06-01')
+  .lte('transaction_date', '2025-06-30')
+  .order('transaction_date');
+```
+
+查詢銀行轉賬交易 (儲蓄戶口):
+```javascript
+const { data } = await supabase.from('financial_transactions')
+  .select('*')
+  .gte('transaction_date', '2025-06-01')
+  .lte('transaction_date', '2025-06-30')
+  .eq('payment_method', '銀行轉賬')
+  .order('transaction_date');
+```
+
+查詢支票交易 (支票戶口):
+```javascript
+const { data } = await supabase.from('financial_transactions')
+  .select('*')
+  .gte('transaction_date', '2025-06-01')
+  .lte('transaction_date', '2025-06-30')
+  .eq('payment_method', '支票')
+  .order('transaction_date');
+```
+
+查詢內部轉帳:
+```javascript
+const { data } = await supabase.from('financial_transactions')
+  .select('*')
+  .gte('transaction_date', '2025-06-01')
+  .lte('transaction_date', '2025-06-30')
+  .or('expense_category.eq.內部轉帳,income_category.eq.內部轉帳')
+  .order('transaction_date');
+```
+
+================================================================================
+10. June 2025 問題 & 修正
+================================================================================
+
+問題 1: 利息重複 (已修正 ✅)
+- EX-0033: 銀行利息 $5.24 ✅ 保留
+- 00001841: 6月份儲蓄戶口利息 $5.24 ❌ 已刪除
+
+問題 2: FPS 手續費重複 (已修正 ✅)
+- EX-0032: 銀行手續費 $155 ✅ 保留
+- 00001842-00001851: FPS 轉帳手續費 共 $155 ❌ 已刪除
+
+問題 3: 支票戶口 - 冇內部轉帳收入 + 多計商務餐 (待修)
+===========================================
+Bank Statement (from PDF: bank statement/002520252/002520252_5304482_HKD_062025.pdf):
+  Opening:  $3,420.54
+  Credit:   $72,500.00 (3筆內部轉帳入賬)
+  Debit:    $70,733.50 (支票提取 + 支票簿費用)
+  Closing:  $5,187.04
+
+Bank Statement 明細:
+| Date      | Type   | Amount    | Balance   | Description |
+|-----------|--------|-----------|-----------|-------------|
+| 31-May-25 | OPEN   |           | 3,420.54  | 承上結餘 |
+| 02-Jun-25 | Debit  | -3,080.00 | 340.54    | 支票No.72 劉建群4月工資 |
+| 06-Jun-25 | Credit | +21,500   | 21,840.54 | 內部轉帳 from Savings |
+| 11-Jun-25 | Credit | +1,000    | 22,840.54 | 內部轉帳 from Savings |
+| 12-Jun-25 | Debit  | -488.50   | 22,352.04 | 支票No.30 盧芷盈6月工資 |
+| 12-Jun-25 | Debit  | -400.00   | 21,952.04 | 支票No.31 盧芷盈6月工資 |
+| 14-Jun-25 | Debit  | -2,040.00 | 19,912.04 | 支票No.27 馮炎英5月工資 |
+| 16-Jun-25 | Debit  | -9,465.00 | 10,447.04 | 支票No.29 王利紅5月工資 |
+| 18-Jun-25 | Debit  | -5,160.00 | 5,287.04  | 支票No.75 劉建群5月工資 |
+| 27-Jun-25 | Debit  | -100.00   | 5,187.04  | 支票簿費用 |
+| 27-Jun-25 | Credit | +50,000   | 55,187.04 | 內部轉帳 from Savings |
+| 27-Jun-25 | Debit  | -50,000   | 5,187.04  | 支票No.32 提取 |
+
+Intranet 顯示:
+  Opening:  $3,420.54
+  Income:   $0.00
+  Expense:  $120,733.50
+  Closing:  -$117,312.96
+
+問題 1: Income 差 $72,500
+-------------------------
+Bank 有 3 筆內部轉帳入賬:
+- 06-Jun: $21,500 ← Intranet 只記 Savings 轉出 (journal 00001837)
+- 11-Jun: $1,000  ← Intranet 只記 Savings 轉出 (journal 00001838)
+- 27-Jun: $50,000 ← Intranet 只記 Savings 轉出 (journal 00001839)
+
+問題: 內部轉帳只記單邊！
+- Savings 轉出有記 (payment_method=銀行轉賬, expense_category=內部轉帳)
+- Current 轉入冇記！需要加 (payment_method=支票, income_category=內部轉帳)
+
+問題 2: Expense 多 $50,000
+--------------------------
+Intranet 有:
+| Journal   | Amount  | Item |
+|-----------|---------|------|
+| 00000769  | 3,080   | 劉建群4月工資 ✅ Bank有 |
+| 00000929  | 488.50  | 盧芷盈6月工資 ✅ Bank有 |
+| 00000930  | 400     | 盧芷盈6月工資 ✅ Bank有 |
+| 00000892  | 2,040   | 馮炎英5月工資 ✅ Bank有 |
+| 00000893  | 9,465   | 王利紅5月工資 ✅ Bank有 |
+| 00000896  | 5,160   | 劉建群5月工資 ✅ Bank有 |
+| 00001840  | 50,000  | 支票提取 ✅ Bank有 |
+| 00000981  | 100     | 支票簿費用 ✅ Bank有 |
+| 00000984  | 50,000  | 商務餐飲費用 ❌ Bank冇！|
+
+00000984 商務餐飲費用 $50,000 唔應該喺 Current Account！
+可能係 Petty Cash 或者係重複記錄。
+
+修正方案 (已完成 ✅):
+-----------------------
+Step 1: 加 3 筆內部轉帳收入 (Current Account) ✅
+  - IT-00001837: 06-Jun $21,500
+  - IT-00001838: 11-Jun $1,000  
+  - IT-00001839: 27-Jun $50,000
+
+Step 2: 00000984 商務餐飲費用 $50,000
+  - 唔使改！呢筆喺 Intranet 顯示但唔計入支票戶口餘額
+  - 因為 00001840 支票提取 $50,000 已經唔喺支票戶口 view
+
+⚠️ Script 計算錯誤原因:
+  - Script filter 錯誤地包含咗 00001840 支票提取
+  - 但 Intranet UI 冇顯示呢筆 (可能 payment_method 唔係 '支票')
+  - 教訓：以 Intranet UI 顯示為準，唔好盲信 script 計算
+
+================================================================================
+11. 刪除記錄時嘅安全措施
+================================================================================
+
+❌ 唔好咁做:
+```javascript
+await supabase.from('financial_transactions')
+  .delete()
+  .in('journal_number', ['00001841', '00001842']);
+// 危險！可能刪除其他月份同 journal_number 嘅記錄
+```
+
+✅ 應該咁做:
+```javascript
+// 1. 先查詢目標記錄嘅 ID
+const { data: toDelete } = await supabase.from('financial_transactions')
+  .select('id')
+  .in('journal_number', ['00001841', '00001842'])
+  .gte('transaction_date', '2025-06-01')
+  .lte('transaction_date', '2025-06-30');
+
+// 2. 用 ID 刪除
+const ids = toDelete.map(r => r.id);
+await supabase.from('financial_transactions')
+  .delete()
+  .in('id', ids);
+```
+
+================================================================================
+12. Reconciliation Script Template
+================================================================================
+
+File: /scripts/reconcile_MONTH_YEAR.js
+
+```javascript
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(
+  'https://cvkxlvdicympakfecgvv.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2a3hsdmRpY3ltcGFrZmVjZ3Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0MjkxODEsImV4cCI6MjA2NzAwNTE4MX0.jp2fPKcBcG4-042UoN3OieR553WAgABhJIujiDJAt-I'
+);
+
+// Bank Statement Data
+const BANK = {
+  savings: { opening: XXXXX, closing: XXXXX, credit: XXXXX, debit: XXXXX },
+  current: { opening: XXXXX, closing: XXXXX, credit: XXXXX, debit: XXXXX }
+};
+
+const MONTH_START = 'YYYY-MM-01';
+const MONTH_END = 'YYYY-MM-DD';
+
+async function reconcile() {
+  const { data: txns } = await supabase.from('financial_transactions')
+    .select('*')
+    .gte('transaction_date', MONTH_START)
+    .lte('transaction_date', MONTH_END)
+    .order('transaction_date');
+
+  // Savings filter
+  const savingsTxns = txns.filter(t => {
+    if (t.payment_method === '銀行轉賬') return true;
+    if (t.payment_method === '支票' && t.income_amount > 0 && t.income_category !== '內部轉帳') return true;
+    return false;
+  });
+
+  // Current filter
+  const currentTxns = txns.filter(t => {
+    if (t.payment_method === '支票' && t.expense_amount > 0) return true;
+    if (t.income_category === '內部轉帳' && t.income_amount > 0) return true;
+    return false;
+  });
+
+  // Calculate
+  const savingsIncome = savingsTxns.reduce((sum, t) => sum + (t.income_amount || 0), 0);
+  const savingsExpense = savingsTxns.reduce((sum, t) => sum + (t.expense_amount || 0), 0);
+  const savingsClosing = BANK.savings.opening + savingsIncome - savingsExpense;
+
+  const currentIncome = currentTxns.reduce((sum, t) => sum + (t.income_amount || 0), 0);
+  const currentExpense = currentTxns.reduce((sum, t) => sum + (t.expense_amount || 0), 0);
+  const currentClosing = BANK.current.opening + currentIncome - currentExpense;
+
+  // Compare
+  console.log('Savings: Intranet', savingsClosing, 'vs Bank', BANK.savings.closing);
+  console.log('Current: Intranet', currentClosing, 'vs Bank', BANK.current.closing);
+}
+
+reconcile();
+```
+
+================================================================================
+13. 跨月支票問題 (Cross-Month Cheques)
+================================================================================
+
+⚠️ 重要發現 (July 2025):
+支票開票日期同兌現日期可能唔同月份！
+
+問題場景:
+- Intranet 用「開票日期」記錄支票
+- 銀行用「兌現日期」記錄支票
+- 如果支票 7 月開，8 月先兌現，銀行會喺 8 月扣數
+
+July 2025 例子:
+| Journal   | Cheque | Amount | 開票日期   | 兌現日期   | 原記錄月份 | 修正後月份 |
+|-----------|--------|--------|------------|------------|------------|------------|
+| 00000891  | 000026 | $4,095 | 2025-07-XX | 2025-08-14 | 7月 | 8月 |
+| 00001011  | 000035 | $5,840 | 2025-07-XX | 2025-08-18 | 7月 | 8月 |
+| 00001013  | 000037 | $7,560 | 2025-07-XX | 2025-08-14 | 7月 | 8月 |
+| Total     |        | $17,495|            |            |    |    |
+
+修正方法:
+1. 對比 Bank Statement 同 Intranet 支票列表
+2. 搵出 Intranet 有但 Bank Statement 冇嘅支票 = 跨月支票
+3. 喺下個月份嘅 Bank Statement 搵返呢啲支票嘅兌現日期
+4. Update transaction_date 同 billing_month 去兌現月份
+
+修正 SQL:
+```javascript
+await supabase.from('financial_transactions')
+  .update({ 
+    transaction_date: '2025-08-14',  // 兌現日期
+    billing_month: '2025年8月',
+    notes: 'Cheque 000026 - 兌現日期 (原開票日 2025-07)'
+  })
+  .eq('journal_number', '00000891');
+```
+
+✅ 核對原則:
+- 對帳時用「銀行兌現日期」為準
+- 支票應該記入「兌現月份」，唔係「開票月份」
+- 咁樣期末餘額先會 match
+
+================================================================================
+14. 內部轉帳命名慣例
+================================================================================
+
+為保持一致性，內部轉帳記錄應該用以下格式:
+
+儲蓄戶口轉出 (Savings Debit):
+- journal_number: IT-MONTH-XXX (例: IT-JUL-001)
+- payment_method: 銀行轉賬
+- expense_amount: 轉帳金額
+- expense_category: 內部轉帳
+- transaction_item: 內部轉賬：儲蓄戶口轉出至支票戶口
+
+支票戶口轉入 (Current Credit):
+- journal_number: IT-MONTH-XXX-IN (例: IT-JUL-001-IN)
+- payment_method: 支票
+- income_amount: 轉帳金額
+- income_category: 內部轉帳
+- transaction_item: 內部轉賬：支票戶口轉入自儲蓄戶口
+
+已建立嘅內部轉帳記錄:
+| Month | Savings Out | Current In | Amount | Notes |
+|-------|-------------|------------|--------|-------|
+| Jun-25 | 00001837 | IT-00001837 | $21,500 | |
+| Jun-25 | 00001838 | IT-00001838 | $1,000 | |
+| Jun-25 | 00001839 | IT-00001839 | $50,000 | |
+| Jul-25 | IT-JUL-001 | IT-JUL-001-IN | $22,255 | |
+| Aug-25 | IT-AUG-001 | IT-AUG-001-IN | $8,490 | Bank Ref: EBICT50806219630 |
+
+================================================================================
+15. 遺漏 Income 記錄
+================================================================================
+
+對帳時發現 Bank 有 income 但 Intranet 冇記錄：
+
+| Month | Journal | Amount | Description | Bank Ref |
+|-------|---------|--------|-------------|----------|
+| Aug-25 | INC-AUG-001 | $2,470 | 余小姐 護理服務費用 | MS YU YUN CHI 2025-08-18 |
+
+================================================================================
+END OF FILE
+================================================================================
