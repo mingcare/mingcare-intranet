@@ -2,11 +2,6 @@
 const isGithubPages =
   process.env.DEPLOY_TARGET === 'github' || process.env.GITHUB_PAGES === 'true'
 
-if (process.env.NODE_ENV !== 'production') {
-  // eslint-disable-next-line no-console
-  console.log('[next.config] isGithubPages:', isGithubPages)
-}
-
 const nextConfig = {
   trailingSlash: true,
   images: {
