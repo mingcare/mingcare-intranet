@@ -74,7 +74,6 @@ interface ExpenseBreakdown {
   銀行手續費: number
   MPF: number
   'Steven 會籍費用': number
-  佣金: number
   [key: string]: number
 }
 
@@ -455,8 +454,7 @@ export default function AccountingPage() {
     '客人退款': 0,
     '銀行手續費': 0,
     'MPF': 0,
-    'Steven 會籍費用': 0,
-    '佣金': 0
+    'Steven 會籍費用': 0
   })
 
   // 獲取月度財務報告數據
@@ -489,8 +487,7 @@ export default function AccountingPage() {
         '客人退款',
         '銀行手續費',
         'MPF',
-        'Steven 會籍費用',
-        '佣金'
+        'Steven 會籍費用'
       ]
       
       // 並行獲取所有需要的數據
