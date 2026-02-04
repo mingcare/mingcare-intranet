@@ -50,13 +50,57 @@ interface CategoryOption {
   is_active: boolean
 }
 
-type ViewMode = 'ledger' | 'petty_cash'
+type ViewMode = 'ledger' | 'petty_cash' | 'monthly_report'
 type AccountType = 'savings' | 'current'  // 儲蓄戶口 / 支票戶口
+
+// 支出類別明細
+interface ExpenseBreakdown {
+  辦公室同事工資: number
+  護理人員工資: number
+  交通開支: number
+  設備: number
+  廣告及軟件費用: number
+  辦公用品: number
+  辦公費用: number
+  牌照費: number
+  租金: number
+  維修費用: number
+  電話費及上網費: number
+  水費: number
+  電費: number
+  商務餐: number
+  保險: number
+  客人退款: number
+  銀行手續費: number
+  MPF: number
+  'Steven 會籍費用': number
+  佣金: number
+  [key: string]: number
+}
+
+// 月度財務報告數據類型
+interface MonthlyReportData {
+  month: string  // YYYY-MM format
+  displayMonth: string  // 顯示用: "2025年4月"
+  // 收入
+  serviceFeeIncome: number  // billing_salary_data.service_fee
+  bankInterestIncome: number  // financial_transactions 銀行利息
+  totalIncome: number
+  // 支出明細
+  staffSalaryExpense: number  // billing_salary_data.staff_salary (護理人員工資)
+  expenseBreakdown: ExpenseBreakdown  // 各類別支出明細
+  regularCommission: number  // 普通佣金（不計 Steven）
+  voucherCommission: number  // 社區券佣金
+  totalExpense: number
+  // 淨額
+  netProfit: number
+}
 
 const DISPLAY_START_DATE = '2025-04-01'
 const DISPLAY_START_MONTH = '2025-04'
 const LEDGER_OPENING_BALANCE = 82755.59
 const CHEQUE_ACCOUNT_OPENING_BALANCE = 1086.54  // 支票戶口期初 (2025-03-31)
+const PETTY_CASH_OPENING_BALANCE = 1999.89  // 零用金期初 (2025-04-01)
 
 const isOnOrAfter = (dateStr: string, cutoff: string) => dateStr >= cutoff
 
@@ -114,19 +158,37 @@ export default function AccountingPage() {
   
   // 零用金歷史累計餘額（用於計算上月結餘）
   const [pettyCashHistoricalBalance, setPettyCashHistoricalBalance] = useState<Record<string, number>>({})
+  
+  // 儲蓄戶口和支票戶口歷史累計餘額（用於跨年期初計算）
+  const [savingsHistoricalBalance, setSavingsHistoricalBalance] = useState<Record<string, number>>({})
+  const [currentHistoricalBalance, setCurrentHistoricalBalance] = useState<Record<string, number>>({})
 
   // 交易項目自動完成
   const [transactionItemSuggestions, setTransactionItemSuggestions] = useState<Array<{ item: string; billingMonth: string }>>([])
   const [showItemSuggestions, setShowItemSuggestions] = useState(false)
   const [filteredSuggestions, setFilteredSuggestions] = useState<Array<{ item: string; billingMonth: string }>>([])
 
+  // 月度財務報告數據
+  const [monthlyReportData, setMonthlyReportData] = useState<MonthlyReportData[]>([])
+  const [loadingMonthlyReport, setLoadingMonthlyReport] = useState(false)
+  const [selectedReportMonth, setSelectedReportMonth] = useState<string>('')  // 空字串表示顯示全部月份
+
   useEffect(() => {
     checkUser()
     fetchCategories()
     fetchAvailableYears()
     fetchPettyCashHistoricalBalance()
+    fetchLedgerHistoricalBalance()
     fetchTransactionItemSuggestions()
   }, [])
+
+  // 當切換到月度報告視圖或年份變更時，獲取報告數據
+  useEffect(() => {
+    if (viewMode === 'monthly_report' && !loading) {
+      setSelectedReportMonth('')  // 重置月份選擇
+      fetchMonthlyReportData()
+    }
+  }, [viewMode, selectedYear, loading])
 
   useEffect(() => {
     if (!loading) {
@@ -210,7 +272,7 @@ export default function AccountingPage() {
 
     // 按月份計算累計餘額
     const monthlyBalance: Record<string, number> = {}
-    let runningBalance = 0
+    let runningBalance = PETTY_CASH_OPENING_BALANCE  // 2025-04 期初餘額
 
     pettyCashTxns.forEach(t => {
       const txnMonth = t.transaction_date.substring(0, 7) // YYYY-MM
@@ -230,6 +292,94 @@ export default function AccountingPage() {
     })
 
     setPettyCashHistoricalBalance(monthlyBalance)
+  }
+
+  // 獲取儲蓄戶口和支票戶口的歷史累計餘額（按月份計算）
+  const fetchLedgerHistoricalBalance = async () => {
+    // 獲取所有交易（從 2025-04 開始）
+    let allData: FinancialTransaction[] = []
+    let offset = 0
+    const pageSize = 1000
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .gte('transaction_date', DISPLAY_START_DATE)
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('transaction_date', { ascending: true })
+        .range(offset, offset + pageSize - 1)
+
+      if (error) {
+        console.error('Error fetching ledger historical balance:', error)
+        return
+      }
+
+      if (data) {
+        allData = [...allData, ...data]
+      }
+
+      if (!data || data.length < pageSize) {
+        break
+      }
+      offset += pageSize
+    }
+
+    // 計算儲蓄戶口每月結餘
+    const savingsMonthly: Record<string, number> = {}
+    let savingsRunning = LEDGER_OPENING_BALANCE
+
+    // 計算支票戶口每月結餘
+    const currentMonthly: Record<string, number> = {}
+    let currentRunning = CHEQUE_ACCOUNT_OPENING_BALANCE
+
+    // 按月份分組處理
+    const monthlyTxns: Record<string, FinancialTransaction[]> = {}
+    allData.forEach(t => {
+      const txnMonth = t.transaction_date.substring(0, 7)
+      if (!monthlyTxns[txnMonth]) monthlyTxns[txnMonth] = []
+      monthlyTxns[txnMonth].push(t)
+    })
+
+    // 按月份順序計算
+    const sortedMonths = Object.keys(monthlyTxns).sort()
+    
+    for (const month of sortedMonths) {
+      const txns = monthlyTxns[month]
+      
+      // 儲蓄戶口篩選
+      const savingsTxns = txns.filter(t => {
+        const paymentMethod = (t.payment_method || '').trim()
+        if (paymentMethod === '支票') {
+          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
+        }
+        return paymentMethod === '銀行轉賬'
+      })
+      
+      // 支票戶口篩選
+      const currentTxns = txns.filter(t => {
+        const paymentMethod = (t.payment_method || '').trim()
+        if (paymentMethod === '支票' || paymentMethod === '支票戶口轉帳') {
+          return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
+        }
+        return false
+      })
+      
+      // 計算儲蓄戶口月結
+      savingsTxns.forEach(t => {
+        savingsRunning += (t.income_amount || 0) - (t.expense_amount || 0)
+      })
+      savingsMonthly[month] = savingsRunning
+      
+      // 計算支票戶口月結
+      currentTxns.forEach(t => {
+        currentRunning += (t.income_amount || 0) - (t.expense_amount || 0)
+      })
+      currentMonthly[month] = currentRunning
+    }
+
+    setSavingsHistoricalBalance(savingsMonthly)
+    setCurrentHistoricalBalance(currentMonthly)
   }
 
   // 獲取歷史交易項目（用於自動完成）
@@ -283,6 +433,327 @@ export default function AccountingPage() {
   const selectSuggestion = (item: string) => {
     setEditingTransaction({ ...editingTransaction!, transaction_item: item })
     setShowItemSuggestions(false)
+  }
+
+  // 創建空的支出明細
+  const createEmptyExpenseBreakdown = (): ExpenseBreakdown => ({
+    '辦公室同事工資': 0,
+    '護理人員工資': 0,
+    '交通開支': 0,
+    '設備': 0,
+    '廣告及軟件費用': 0,
+    '辦公用品': 0,
+    '辦公費用': 0,
+    '牌照費': 0,
+    '租金': 0,
+    '維修費用': 0,
+    '電話費及上網費': 0,
+    '水費': 0,
+    '電費': 0,
+    '商務餐': 0,
+    '保險': 0,
+    '客人退款': 0,
+    '銀行手續費': 0,
+    'MPF': 0,
+    'Steven 會籍費用': 0,
+    '佣金': 0
+  })
+
+  // 獲取月度財務報告數據
+  const fetchMonthlyReportData = async () => {
+    setLoadingMonthlyReport(true)
+    
+    try {
+      // 計算該年份的日期範圍
+      const startDate = `${selectedYear}-01-01`
+      const endDate = `${selectedYear}-12-31`
+      
+      // 指定的支出類別（從 financial_transactions）
+      // 注意：護理人員工資 從 billing_salary_data.staff_salary 計算，不從 financial_transactions 取
+      const allowedExpenseCategories = [
+        '辦公室同事工資',
+        // '護理人員工資',  // 排除！從 billing_salary_data.staff_salary 取得
+        '交通開支',
+        '設備',
+        '廣告及軟件費用',
+        '辦公用品',
+        '辦公費用',
+        '牌照費',
+        '租金',
+        '維修費用',
+        '電話費及上網費',
+        '水費',
+        '電費',
+        '商務餐',
+        '保險',
+        '客人退款',
+        '銀行手續費',
+        'MPF',
+        'Steven 會籍費用',
+        '佣金'
+      ]
+      
+      // 並行獲取所有需要的數據
+      const [billingSalaryRes, financialTxnsRes, commissionRatesRes, customersRes, voucherRatesRes] = await Promise.all([
+        // 獲取服務記錄（按 service_date 篩選）
+        supabase
+          .from('billing_salary_data')
+          .select('service_date, service_fee, staff_salary, customer_id, service_hours, service_type, project_category')
+          .gte('service_date', startDate)
+          .lte('service_date', endDate),
+        
+        // 獲取財務交易（按 transaction_date 篩選）
+        supabase
+          .from('financial_transactions')
+          .select('transaction_date, income_category, income_amount, expense_category, expense_amount')
+          .gte('transaction_date', startDate)
+          .lte('transaction_date', endDate)
+          .or('is_deleted.is.null,is_deleted.eq.false'),
+        
+        // 獲取佣金費率
+        supabase
+          .from('commission_rate_introducer')
+          .select('introducer, first_month_commission, subsequent_month_commission, voucher_commission_percentage'),
+        
+        // 獲取客戶介紹人信息
+        supabase
+          .from('customer_personal_data')
+          .select('customer_id, introducer'),
+        
+        // 獲取社區券費率
+        supabase
+          .from('voucher_rate')
+          .select('service_type, service_rate')
+      ])
+      
+      if (billingSalaryRes.error) {
+        console.error('Error fetching billing_salary_data:', billingSalaryRes.error)
+      }
+      if (financialTxnsRes.error) {
+        console.error('Error fetching financial_transactions:', financialTxnsRes.error)
+      }
+      
+      const billingSalaryData = billingSalaryRes.data || []
+      const financialTxns = financialTxnsRes.data || []
+      const commissionRates = commissionRatesRes.data || []
+      const customers = customersRes.data || []
+      const voucherRates = voucherRatesRes.data || []
+      
+      // 建立客戶->介紹人映射
+      const customerIntroducerMap = new Map<string, string>()
+      customers.forEach((c: { customer_id: string; introducer: string | null }) => {
+        if (c.introducer) {
+          customerIntroducerMap.set(c.customer_id, c.introducer)
+        }
+      })
+      
+      // 建立介紹人->社區券佣金百分比映射（只有 raymond 有 15%）
+      const introducerVoucherCommissionMap = new Map<string, number>()
+      // 建立介紹人->普通佣金映射（排除 Steven Kwok）
+      const introducerRegularCommissionMap = new Map<string, { first: number; subsequent: number }>()
+      
+      commissionRates.forEach((r: { 
+        introducer: string
+        first_month_commission: number | null
+        subsequent_month_commission: number | null
+        voucher_commission_percentage: number | null 
+      }) => {
+        // 社區券佣金（目前只有 raymond 有 15%）
+        if (r.voucher_commission_percentage && r.voucher_commission_percentage > 0) {
+          introducerVoucherCommissionMap.set(r.introducer, r.voucher_commission_percentage)
+        }
+        // 普通佣金（排除 Steven Kwok）
+        if (r.introducer !== 'Steven Kwok') {
+          const first = r.first_month_commission || 0
+          const subsequent = r.subsequent_month_commission || 0
+          if (first > 0 || subsequent > 0) {
+            introducerRegularCommissionMap.set(r.introducer, { first, subsequent })
+          }
+        }
+      })
+      
+      // 追蹤每個介紹人各客戶的首次服務月份（用於判斷首月/後續月）
+      // key: "介紹人|客戶ID", value: 首次服務月份 "YYYY-MM"
+      const introducerCustomerFirstMonth = new Map<string, string>()
+      
+      // 獲取社區券費率的輔助函數
+      const getVoucherRate = (serviceType: string): number => {
+        if (!serviceType) return 0
+        const matchedRate = voucherRates.find((v: { service_type: string }) => {
+          if (v.service_type === serviceType) return true
+          return v.service_type.includes(serviceType.substring(0, 2)) || 
+                 serviceType.includes(v.service_type.substring(0, 2))
+        })
+        if (matchedRate) return (matchedRate as { service_rate: number }).service_rate
+        
+        // 備用匹配
+        if (serviceType.includes('NC') || serviceType.includes('護理')) return 945
+        if (serviceType.includes('RT') && serviceType.includes('專業')) return 982
+        if (serviceType.includes('RT') || serviceType.includes('復康') || serviceType.includes('OTA') || serviceType.includes('RA')) return 248
+        if (serviceType.includes('PC') || serviceType.includes('看顧')) return 248
+        if (serviceType.includes('HC') || serviceType.includes('家居')) return 150
+        if (serviceType.includes('ES') || serviceType.includes('護送') || serviceType.includes('陪診')) return 150
+        return 0
+      }
+      
+      // 按月份匯總數據
+      const monthlyMap: Record<string, MonthlyReportData> = {}
+      
+      // 初始化每個月份
+      for (let month = 1; month <= 12; month++) {
+        const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`
+        monthlyMap[monthKey] = {
+          month: monthKey,
+          displayMonth: `${selectedYear}年${month}月`,
+          serviceFeeIncome: 0,
+          bankInterestIncome: 0,
+          totalIncome: 0,
+          staffSalaryExpense: 0,
+          expenseBreakdown: createEmptyExpenseBreakdown(),
+          regularCommission: 0,
+          voucherCommission: 0,
+          totalExpense: 0,
+          netProfit: 0
+        }
+      }
+      
+      // 追蹤每個月份每個客戶的服務費用（用於計算普通佣金達標條件）
+      // key: "monthKey|客戶ID", value: { introducer, monthlyFee }
+      const monthlyCustomerFees = new Map<string, { introducer: string; monthlyFee: number }>()
+      
+      // 處理 billing_salary_data
+      billingSalaryData.forEach((record: { 
+        service_date: string
+        service_fee: number
+        staff_salary: number
+        customer_id: string
+        service_hours: number
+        service_type: string
+        project_category: string
+      }) => {
+        if (!record.service_date) return
+        const monthKey = record.service_date.substring(0, 7)  // YYYY-MM
+        if (!monthlyMap[monthKey]) return
+        
+        // 服務費收入
+        monthlyMap[monthKey].serviceFeeIncome += (record.service_fee || 0)
+        // 員工薪資支出（護理人員工資）
+        monthlyMap[monthKey].staffSalaryExpense += (record.staff_salary || 0)
+        
+        // 獲取客戶的介紹人
+        const introducer = customerIntroducerMap.get(record.customer_id)
+        if (introducer) {
+          // 累計每個客戶每月的服務費用
+          const feeKey = `${monthKey}|${record.customer_id}`
+          if (!monthlyCustomerFees.has(feeKey)) {
+            monthlyCustomerFees.set(feeKey, { introducer, monthlyFee: 0 })
+          }
+          monthlyCustomerFees.get(feeKey)!.monthlyFee += (record.service_fee || 0)
+          
+          // 記錄每個介紹人-客戶的首次服務月份
+          const introducerCustomerKey = `${introducer}|${record.customer_id}`
+          if (!introducerCustomerFirstMonth.has(introducerCustomerKey)) {
+            introducerCustomerFirstMonth.set(introducerCustomerKey, monthKey)
+          } else {
+            // 如果已有記錄，比較並保留較早的月份
+            const existingMonth = introducerCustomerFirstMonth.get(introducerCustomerKey)!
+            if (monthKey < existingMonth) {
+              introducerCustomerFirstMonth.set(introducerCustomerKey, monthKey)
+            }
+          }
+        }
+        
+        // 計算社區券佣金（排除 MC街客 類型）
+        const projectCategory = record.project_category || ''
+        if (!projectCategory.includes('MC街客')) {
+          if (introducer && introducerVoucherCommissionMap.has(introducer)) {
+            const commissionPercentage = introducerVoucherCommissionMap.get(introducer)!
+            const voucherRate = getVoucherRate(record.service_type || '')
+            const hours = record.service_hours || 0
+            const voucherTotal = hours * voucherRate
+            const commission = Math.round(voucherTotal * commissionPercentage / 100 * 100) / 100
+            monthlyMap[monthKey].voucherCommission += commission
+          }
+        }
+      })
+      
+      // 計算普通佣金（排除 Steven Kwok，只計算達標客戶：月服務費 >= $6,000）
+      monthlyCustomerFees.forEach(({ introducer, monthlyFee }, feeKey) => {
+        const [monthKey, customerId] = feeKey.split('|')
+        
+        // 排除 Steven Kwok
+        if (introducer === 'Steven Kwok') return
+        
+        // 達標條件：月服務費用 >= $6,000
+        const isQualified = monthlyFee >= 6000
+        if (!isQualified) return
+        
+        const rates = introducerRegularCommissionMap.get(introducer)
+        if (rates) {
+          const introducerCustomerKey = `${introducer}|${customerId}`
+          const firstMonth = introducerCustomerFirstMonth.get(introducerCustomerKey)
+          const isFirstMonth = firstMonth === monthKey
+          const commission = isFirstMonth ? rates.first : rates.subsequent
+          monthlyMap[monthKey].regularCommission += commission
+        }
+      })
+      
+      // 處理 financial_transactions
+      financialTxns.forEach((txn: { 
+        transaction_date: string
+        income_category: string | null
+        income_amount: number
+        expense_category: string | null
+        expense_amount: number 
+      }) => {
+        if (!txn.transaction_date) return
+        const monthKey = txn.transaction_date.substring(0, 7)  // YYYY-MM
+        if (!monthlyMap[monthKey]) return
+        
+        // 收入：銀行利息
+        if (txn.income_category === '銀行利息') {
+          monthlyMap[monthKey].bankInterestIncome += (txn.income_amount || 0)
+        }
+        
+        // 支出：按類別分類
+        if (txn.expense_amount > 0 && txn.expense_category && allowedExpenseCategories.includes(txn.expense_category)) {
+          const category = txn.expense_category as keyof ExpenseBreakdown
+          if (monthlyMap[monthKey].expenseBreakdown[category] !== undefined) {
+            monthlyMap[monthKey].expenseBreakdown[category] += (txn.expense_amount || 0)
+          }
+        }
+      })
+      
+      // 計算總計
+      Object.values(monthlyMap).forEach(data => {
+        data.totalIncome = data.serviceFeeIncome + data.bankInterestIncome
+        // 將 staffSalaryExpense 放入 expenseBreakdown['護理人員工資']
+        data.expenseBreakdown['護理人員工資'] = data.staffSalaryExpense
+        // 計算營運開支總額（所有支出類別的總和，已包含護理人員工資）
+        const totalOperatingExpenses = Object.values(data.expenseBreakdown).reduce((sum, val) => sum + val, 0)
+        // totalExpense = 營運開支 + 普通佣金 + 社區券佣金
+        data.totalExpense = totalOperatingExpenses + data.regularCommission + data.voucherCommission
+        data.netProfit = data.totalIncome - data.totalExpense
+      })
+      
+      // 按月份排序並過濾掉全零的月份
+      const sortedData = Object.values(monthlyMap)
+        .sort((a, b) => a.month.localeCompare(b.month))
+        .filter(data => 
+          data.serviceFeeIncome > 0 || 
+          data.bankInterestIncome > 0 || 
+          data.staffSalaryExpense > 0 || 
+          Object.values(data.expenseBreakdown).some(v => v > 0) ||
+          data.regularCommission > 0 ||
+          data.voucherCommission > 0
+        )
+      
+      setMonthlyReportData(sortedData)
+    } catch (error) {
+      console.error('Error fetching monthly report data:', error)
+    } finally {
+      setLoadingMonthlyReport(false)
+    }
   }
 
   // 載入所有類別選項
@@ -360,10 +831,11 @@ export default function AccountingPage() {
       const paymentMethod = (t.payment_method || '').trim()
       const isCashPayment = paymentMethod === '現金'
 
-      // 基本篩選：銀行轉賬、支票、空白、非零用金現金
+      // 基本篩選：銀行轉賬、支票、支票戶口轉帳、空白、非零用金現金
       const isLedgerTransaction = (
         paymentMethod === '銀行轉賬' ||
         paymentMethod === '支票' ||
+        paymentMethod === '支票戶口轉帳' ||
         !paymentMethod || // 付款方式為空的顯示在流水帳
         (isCashPayment && t.deduct_from_petty_cash === false)
       )
@@ -396,17 +868,18 @@ export default function AccountingPage() {
         // ============================================================
         // 顯示：
         //   1. 支票支出 (payment_method='支票', expense_amount > 0)
-        //   2. 內部轉帳收入 (payment_method='支票', income_category='內部轉帳')
+        //   2. 支票戶口轉帳 (payment_method='支票戶口轉帳') - FPS/CHATS 等電子轉帳
+        //   3. 內部轉帳收入 (payment_method='支票', income_category='內部轉帳')
         //
         // 內部轉帳處理：
         //   - 正向 (Savings→Current): income_category='內部轉帳', payment_method='支票' → 顯示
         //   - 反向 (Current→Savings): expense_category='內部轉帳', payment_method='支票' → 顯示
         // ============================================================
-        if (paymentMethod === '支票') {
-          // 支票支出 + 內部轉帳收入 + 反向內部轉帳支出
+        if (paymentMethod === '支票' || paymentMethod === '支票戶口轉帳') {
+          // 支票支出 + 支票戶口轉帳 + 內部轉帳收入 + 反向內部轉帳支出
           return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
         }
-        return false // 只顯示支票交易
+        return false // 只顯示支票/支票戶口轉帳交易
       }
 
       return true // accountType === 'all'
@@ -431,56 +904,74 @@ export default function AccountingPage() {
   }
 
   // 計算儲蓄戶口/支票戶口的動態期初餘額
-  // 期初餘額 = 基礎期初 + 所選月份之前所有月份的交易淨值
+  // 期初餘額 = 上月結餘（從歷史數據獲取）
   const getLedgerOpeningBalance = () => {
     const baseOpeningBalance = accountType === 'current' 
       ? CHEQUE_ACCOUNT_OPENING_BALANCE 
       : LEDGER_OPENING_BALANCE
     
-    // 如果選擇「全部」或「2025-04」，直接返回基礎期初餘額
-    if (selectedMonth === 'all' || selectedMonth <= DISPLAY_START_MONTH) {
+    const historicalBalance = accountType === 'current' 
+      ? currentHistoricalBalance 
+      : savingsHistoricalBalance
+    
+    // 如果選擇「全部」，根據年份返回期初
+    if (selectedMonth === 'all') {
+      // 2025年：返回基礎期初
+      if (selectedYear === 2025) {
+        return baseOpeningBalance
+      }
+      
+      // 其他年份：找上一年12月的結餘
+      const prevYearEndKey = `${selectedYear - 1}-12`
+      const sortedMonths = Object.keys(historicalBalance).sort()
+      let openingBalance = baseOpeningBalance
+      
+      for (const m of sortedMonths) {
+        if (m <= prevYearEndKey) {
+          openingBalance = historicalBalance[m]
+        } else {
+          break
+        }
+      }
+      
+      return openingBalance
+    }
+    
+    // 如果選擇 2025-04，直接返回基礎期初餘額
+    if (selectedMonth <= DISPLAY_START_MONTH) {
       return baseOpeningBalance
     }
     
-    // 計算所選月份之前所有交易的淨值
-    const priorTransactions = transactions.filter(t => {
-      const txnMonth = getMonthFromDate(t.transaction_date)
-      if (txnMonth >= selectedMonth || txnMonth < DISPLAY_START_MONTH) return false
-      
-      const paymentMethod = (t.payment_method || '').trim()
-      const isCashPayment = paymentMethod === '現金'
-      
-      // 基本篩選（與 getLedgerTransactions 相同邏輯）
-      const isLedgerTransaction = (
-        paymentMethod === '銀行轉賬' ||
-        paymentMethod === '支票' ||
-        !paymentMethod ||
-        (isCashPayment && t.deduct_from_petty_cash === false)
-      )
-      
-      if (!isLedgerTransaction) return false
-      
-      // 戶口類型篩選
-      if (accountType === 'savings') {
-        if (paymentMethod === '支票') {
-          return (t.income_amount || 0) > 0 && !(t.expense_amount > 0) && t.income_category !== '內部轉帳'
-        }
-        return paymentMethod === '銀行轉賬'
-      } else if (accountType === 'current') {
-        if (paymentMethod === '支票') {
-          return (t.expense_amount || 0) > 0 || (t.income_amount > 0 && t.income_category === '內部轉帳')
-        }
-        return false
+    // 找到選擇月份的上一個月
+    const [year, month] = selectedMonth.split('-').map(Number)
+    let prevYear = year
+    let prevMonth = month - 1
+    
+    if (prevMonth === 0) {
+      prevMonth = 12
+      prevYear -= 1
+    }
+    
+    const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`
+    
+    // 如果上月早於 2025-04，返回基礎期初
+    if (prevMonthKey < DISPLAY_START_MONTH) {
+      return baseOpeningBalance
+    }
+    
+    // 從歷史累計餘額中獲取上月結餘
+    const sortedMonths = Object.keys(historicalBalance).sort()
+    let openingBalance = baseOpeningBalance
+    
+    for (const m of sortedMonths) {
+      if (m <= prevMonthKey) {
+        openingBalance = historicalBalance[m]
+      } else {
+        break
       }
-      
-      return true
-    })
+    }
     
-    const priorNetChange = priorTransactions.reduce((sum, t) => {
-      return sum + (t.income_amount || 0) - (t.expense_amount || 0)
-    }, 0)
-    
-    return baseOpeningBalance + priorNetChange
+    return openingBalance
   }
 
   // 判斷是否為零用金補充交易（expense_category = 'Petty Cash'）
@@ -536,12 +1027,17 @@ export default function AccountingPage() {
   const getPettyCashOpeningBalance = () => {
     // 如果選擇「全部月份」，則計算該年度之前的累計餘額
     if (selectedMonth === 'all') {
+      // 2025年：期初是 PETTY_CASH_OPENING_BALANCE
+      if (selectedYear === 2025) {
+        return PETTY_CASH_OPENING_BALANCE
+      }
+      
       // 找到選擇年份的前一年12月的餘額
       const prevYear = selectedYear - 1
       const prevYearEndKey = `${prevYear}-12`
       
       const sortedMonths = Object.keys(pettyCashHistoricalBalance).sort()
-      let openingBalance = 0
+      let openingBalance = PETTY_CASH_OPENING_BALANCE
       
       for (const m of sortedMonths) {
         if (m <= prevYearEndKey) {
@@ -552,6 +1048,11 @@ export default function AccountingPage() {
       }
       
       return openingBalance
+    }
+    
+    // 2025-04 月份的期初就是 PETTY_CASH_OPENING_BALANCE
+    if (selectedMonth === DISPLAY_START_MONTH) {
+      return PETTY_CASH_OPENING_BALANCE
     }
     
     // 找到選擇月份的上一個月
@@ -566,10 +1067,15 @@ export default function AccountingPage() {
     
     const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`
     
+    // 如果上月早於 2025-04，返回期初
+    if (prevMonthKey < DISPLAY_START_MONTH) {
+      return PETTY_CASH_OPENING_BALANCE
+    }
+    
     // 從歷史累計餘額中獲取上月結餘
     // 需要找到 <= prevMonthKey 的最近一個月的餘額
     const sortedMonths = Object.keys(pettyCashHistoricalBalance).sort()
-    let openingBalance = 0
+    let openingBalance = PETTY_CASH_OPENING_BALANCE
     
     for (const m of sortedMonths) {
       if (m <= prevMonthKey) {
@@ -680,6 +1186,7 @@ export default function AccountingPage() {
 
     // 重新載入數據
     fetchTransactions()
+    fetchLedgerHistoricalBalance()
   }
 
   // 開啟編輯 Modal
@@ -949,7 +1456,7 @@ export default function AccountingPage() {
     
     try {
       // 準備批量插入的數據
-      const insertData = allTransactions.map(item => ({
+      let insertData = allTransactions.map(item => ({
         journal_number: item.journalNumber,
         transaction_code: '',
         fiscal_year: item.billingYear,
@@ -969,6 +1476,36 @@ export default function AccountingPage() {
         is_deleted: false
       }))
       
+      // 自動為銀行轉賬支出添加 $5 手續費
+      const bankTransferExpenses = allTransactions.filter(item => 
+        item.data.payment_method === '銀行轉賬' && (item.data.expense_amount || 0) > 0
+      )
+      
+      let feeJournalNumber = Math.max(...allTransactions.map(item => parseInt(item.journalNumber, 10)))
+      
+      for (const item of bankTransferExpenses) {
+        feeJournalNumber++
+        insertData.push({
+          journal_number: feeJournalNumber.toString().padStart(8, '0'),
+          transaction_code: '',
+          fiscal_year: item.billingYear,
+          billing_month: `${item.billingYear}年${item.billingMonthNum}月`,
+          transaction_date: item.data.transaction_date,
+          transaction_item: `銀行轉賬手續費 (${item.data.transaction_item})`,
+          payment_method: '銀行轉賬',
+          income_category: null,
+          income_amount: 0,
+          expense_category: '銀行手續費',
+          expense_amount: 5,
+          handler: item.data.handler,
+          reimbursement_status: null,
+          notes: `自動產生 - 對應流水號 ${item.journalNumber}`,
+          deduct_from_petty_cash: null,
+          created_by: currentUser,
+          is_deleted: false
+        })
+      }
+      
       const { data, error } = await supabase
         .from('financial_transactions')
         .insert(insertData)
@@ -981,8 +1518,8 @@ export default function AccountingPage() {
         return
       }
       
-      // 更新 global_journal_sequence 表的 last_number
-      const maxJournalNumber = Math.max(...allTransactions.map(item => parseInt(item.journalNumber, 10)))
+      // 更新 global_journal_sequence 表的 last_number（包含手續費的流水號）
+      const maxJournalNumber = Math.max(...insertData.map(item => parseInt(item.journal_number, 10)))
       await supabase
         .from('global_journal_sequence')
         .update({ last_number: maxJournalNumber })
@@ -1010,6 +1547,7 @@ export default function AccountingPage() {
       setEditingPendingIndex(null)
       fetchTransactions()
       fetchPettyCashHistoricalBalance()
+      fetchLedgerHistoricalBalance()
       alert(`成功新增 ${allTransactions.length} 筆帳目！`)
     } catch (err) {
       console.error('Error:', err)
@@ -1164,6 +1702,7 @@ export default function AccountingPage() {
         setPendingTransactions([])
         fetchTransactions()
         fetchPettyCashHistoricalBalance()
+        fetchLedgerHistoricalBalance()
         alert('內部轉帳成功！已創建兩筆記錄。')
         return
       } catch (err) {
@@ -1216,6 +1755,54 @@ export default function AccountingPage() {
       new_values: data,
       performed_by: currentUser
     })
+    
+    // 自動為銀行轉賬支出添加 $5 手續費
+    if (editingTransaction.payment_method === '銀行轉賬' && (editingTransaction.expense_amount || 0) > 0) {
+      const feeJournalNumber = (parseInt(editingTransaction.journal_number, 10) + 1).toString().padStart(8, '0')
+      
+      const { data: feeData, error: feeError } = await supabase
+        .from('financial_transactions')
+        .insert({
+          journal_number: feeJournalNumber,
+          transaction_code: '',
+          fiscal_year: billingYear,
+          billing_month: billingMonth,
+          transaction_date: editingTransaction.transaction_date,
+          transaction_item: `銀行轉賬手續費 (${editingTransaction.transaction_item})`,
+          payment_method: '銀行轉賬',
+          income_category: null,
+          income_amount: 0,
+          expense_category: '銀行手續費',
+          expense_amount: 5,
+          handler: editingTransaction.handler,
+          reimbursement_status: null,
+          notes: `自動產生 - 對應流水號 ${editingTransaction.journal_number}`,
+          deduct_from_petty_cash: null,
+          created_by: currentUser,
+          is_deleted: false
+        })
+        .select()
+        .single()
+      
+      if (!feeError && feeData) {
+        // 記錄手續費審計日誌
+        await supabase.from('financial_audit_log').insert({
+          transaction_id: feeData.id,
+          journal_number: feeJournalNumber,
+          action_type: 'create',
+          changed_fields: ['all'],
+          old_values: {},
+          new_values: feeData,
+          performed_by: currentUser
+        })
+        
+        // 更新 global_journal_sequence
+        await supabase
+          .from('global_journal_sequence')
+          .update({ last_number: parseInt(feeJournalNumber, 10) })
+          .eq('id', 1)
+      }
+    }
 
     setShowEditModal(false)
     setIsCreating(false)
@@ -1223,6 +1810,7 @@ export default function AccountingPage() {
     setPendingTransactions([])
     fetchTransactions()
     fetchPettyCashHistoricalBalance()
+    fetchLedgerHistoricalBalance()
     alert('新增成功！')
   }
 
@@ -1326,6 +1914,8 @@ export default function AccountingPage() {
     setShowEditModal(false)
     setSaving(false)
     fetchTransactions()
+    fetchLedgerHistoricalBalance()
+    fetchPettyCashHistoricalBalance()
   }
 
   // 確認刪除
@@ -1372,6 +1962,8 @@ export default function AccountingPage() {
     setTransactionToDelete(null)
     setSaving(false)
     fetchTransactions()
+    fetchLedgerHistoricalBalance()
+    fetchPettyCashHistoricalBalance()
   }
 
   // 移動交易順序（上移/下移）
@@ -1535,6 +2127,17 @@ export default function AccountingPage() {
             <span className="mr-2">💵</span>
             零用金
           </button>
+          <button
+            onClick={() => setViewMode('monthly_report')}
+            className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+              viewMode === 'monthly_report'
+                ? 'bg-white dark:bg-fill-tertiary text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <span className="mr-2">📊</span>
+            月度報告
+          </button>
         </div>
 
         {/* 戶口類型篩選（只在流水帳視圖顯示） */}
@@ -1642,8 +2245,8 @@ export default function AccountingPage() {
             </div>
           </div>
         ) : (
-          <div className={`grid grid-cols-2 gap-4 ${selectedMonth !== 'all' && pettyCashStats.openingBalance !== 0 ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
-            {selectedMonth !== 'all' && pettyCashStats.openingBalance !== 0 && (
+          <div className={`grid grid-cols-2 gap-4 ${selectedMonth !== 'all' && selectedMonth !== DISPLAY_START_MONTH ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
+            {selectedMonth !== 'all' && selectedMonth !== DISPLAY_START_MONTH && (
               <div className="card-apple bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20">
                 <div className="card-apple-content text-center">
                   <p className="text-xs text-purple-600 dark:text-purple-400 mb-1">上月結餘</p>
@@ -2026,6 +2629,362 @@ export default function AccountingPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 月度財務報告 */}
+        {viewMode === 'monthly_report' && (
+          <div className="space-y-6">
+            {/* 年份 + 月份篩選 */}
+            <div className="card-apple">
+              <div className="card-apple-content">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-text-secondary">年份：</label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="input-apple w-32"
+                    >
+                      {availableYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-text-secondary">月份：</label>
+                    <select
+                      value={selectedReportMonth}
+                      onChange={(e) => setSelectedReportMonth(e.target.value)}
+                      className="input-apple w-40"
+                    >
+                      <option value="">全部月份</option>
+                      {monthlyReportData.map(data => (
+                        <option key={data.month} value={data.month}>{data.displayMonth}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 報告內容 */}
+            {loadingMonthlyReport ? (
+              <div className="card-apple">
+                <div className="card-apple-content text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-text-tertiary">載入中...</p>
+                </div>
+              </div>
+            ) : monthlyReportData.length === 0 ? (
+              <div className="card-apple">
+                <div className="card-apple-content text-center py-12">
+                  <span className="text-4xl mb-4 block">📊</span>
+                  <p className="text-text-tertiary">暫無 {selectedYear} 年數據</p>
+                </div>
+              </div>
+            ) : selectedReportMonth ? (
+              // 單月詳細報告（像 Excel 格式）
+              (() => {
+                const monthData = monthlyReportData.find(d => d.month === selectedReportMonth)
+                if (!monthData) return null
+                
+                // 計算各項總和
+                const totalOperatingExpenses = Object.values(monthData.expenseBreakdown).reduce((sum, val) => sum + val, 0)
+                const grossProfit = monthData.totalIncome - monthData.staffSalaryExpense  // 毛利 = 收入 - 人工
+                const netProfit = monthData.netProfit
+                const grossProfitRate = monthData.totalIncome > 0 ? (grossProfit / monthData.totalIncome * 100) : 0
+                const netProfitRate = monthData.totalIncome > 0 ? (netProfit / monthData.totalIncome * 100) : 0
+                
+                return (
+                  <div className="card-apple overflow-hidden">
+                    <div className="card-apple-content p-0">
+                      {/* 標題 */}
+                      <div className="px-6 py-4 border-b border-border-light bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                        <h2 className="text-xl font-bold text-text-primary text-center">
+                          📊 {monthData.displayMonth} 財務報告
+                        </h2>
+                      </div>
+                      
+                      {/* 收入和支出並排 */}
+                      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border-light">
+                        {/* 左側：收入項目 */}
+                        <div className="p-4">
+                          <h3 className="text-base font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                            收入項目
+                          </h3>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center py-2 border-b border-border-light">
+                              <span className="text-sm text-text-secondary">護理服務費用</span>
+                              <span className="font-mono text-sm font-medium text-green-600 dark:text-green-400">
+                                {formatCurrency(monthData.serviceFeeIncome)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-border-light">
+                              <span className="text-sm text-text-secondary">銀行利息</span>
+                              <span className="font-mono text-sm font-medium text-green-600 dark:text-green-400">
+                                {formatCurrency(monthData.bankInterestIncome)}
+                              </span>
+                            </div>
+                            {/* 每月總收入 */}
+                            <div className="flex justify-between items-center py-3 mt-2 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 -mx-3">
+                              <span className="text-sm font-bold text-green-700 dark:text-green-300">每月總收入</span>
+                              <span className="font-mono text-base font-bold text-green-700 dark:text-green-300">
+                                {formatCurrency(monthData.totalIncome)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* 右側：支出項目 */}
+                        <div className="p-4">
+                          <h3 className="text-base font-semibold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                            支出項目
+                          </h3>
+                          <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                            {/* 辦公室同事工資 - from financial_transactions */}
+                            <div className="flex justify-between items-center py-1.5">
+                              <span className="text-sm text-text-secondary">辦公室同事工資</span>
+                              <span className="font-mono text-sm text-red-600 dark:text-red-400">
+                                {monthData.expenseBreakdown['辦公室同事工資'] > 0 ? formatCurrency(monthData.expenseBreakdown['辦公室同事工資']) : '$0.00'}
+                              </span>
+                            </div>
+                            {/* 護理人員工資 - from billing_salary_data */}
+                            <div className="flex justify-between items-center py-1.5">
+                              <span className="text-sm text-text-secondary">護理人員工資</span>
+                              <span className="font-mono text-sm text-red-600 dark:text-red-400">
+                                {monthData.staffSalaryExpense > 0 ? formatCurrency(monthData.staffSalaryExpense) : '$0.00'}
+                              </span>
+                            </div>
+                            {/* 其餘支出類別 */}
+                            {[
+                              '交通開支', '設備', '廣告及軟件費用', '辦公用品', '辦公費用',
+                              '牌照費', '租金', '維修費用', '電話費及上網費', '水費', '電費',
+                              '商務餐', '保險', '客人退款', '銀行手續費', 'MPF', 'Steven 會籍費用'
+                            ].map(category => (
+                              <div key={category} className="flex justify-between items-center py-1.5">
+                                <span className="text-sm text-text-secondary">{category}</span>
+                                <span className="font-mono text-sm text-red-600 dark:text-red-400">
+                                  {(monthData.expenseBreakdown[category as keyof ExpenseBreakdown] || 0) > 0 
+                                    ? formatCurrency(monthData.expenseBreakdown[category as keyof ExpenseBreakdown]) 
+                                    : '$0.00'}
+                                </span>
+                              </div>
+                            ))}
+                            {/* 普通佣金（不計 Steven） */}
+                            <div className="flex justify-between items-center py-1.5">
+                              <span className="text-sm text-text-secondary">普通佣金（不計 Steven）</span>
+                              <span className="font-mono text-sm text-red-600 dark:text-red-400">
+                                {monthData.regularCommission > 0 ? formatCurrency(monthData.regularCommission) : '$0.00'}
+                              </span>
+                            </div>
+                            {/* 社區券佣金 */}
+                            <div className="flex justify-between items-center py-1.5">
+                              <span className="text-sm text-text-secondary">社區券佣金</span>
+                              <span className="font-mono text-sm text-red-600 dark:text-red-400">
+                                {monthData.voucherCommission > 0 ? formatCurrency(monthData.voucherCommission) : '$0.00'}
+                              </span>
+                            </div>
+                          </div>
+                          {/* 每月總開支 */}
+                          <div className="flex justify-between items-center py-3 mt-3 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 -mx-3">
+                            <span className="text-sm font-bold text-red-700 dark:text-red-300">每月總開支</span>
+                            <span className="font-mono text-base font-bold text-red-700 dark:text-red-300">
+                              {formatCurrency(monthData.totalExpense)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 底部匯總 */}
+                      <div className="px-6 py-4 bg-bg-secondary border-t border-border-light">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {/* 月度毛利 */}
+                          <div className="text-center">
+                            <p className="text-xs text-text-tertiary mb-1">月度毛利</p>
+                            <p className={`font-mono font-bold ${grossProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {formatCurrency(grossProfit)}
+                            </p>
+                          </div>
+                          {/* 月度淨利 */}
+                          <div className="text-center">
+                            <p className="text-xs text-text-tertiary mb-1">月度淨利</p>
+                            <p className={`font-mono font-bold ${netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {formatCurrency(netProfit)}
+                            </p>
+                          </div>
+                          {/* 毛利率 */}
+                          <div className="text-center">
+                            <p className="text-xs text-text-tertiary mb-1">月度毛利率</p>
+                            <p className={`font-mono font-bold ${grossProfitRate >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {grossProfitRate.toFixed(1)}%
+                            </p>
+                          </div>
+                          {/* 淨利率 */}
+                          <div className="text-center">
+                            <p className="text-xs text-text-tertiary mb-1">月度淨利率</p>
+                            <p className={`font-mono font-bold ${netProfitRate >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {netProfitRate.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()
+            ) : (
+              // 全部月份總覽
+              <>
+                {/* 年度總計卡片 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="card-apple bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+                    <div className="card-apple-content text-center">
+                      <p className="text-xs text-green-600 dark:text-green-400 mb-1">年度總收入</p>
+                      <p className="text-xl font-bold text-green-700 dark:text-green-300">
+                        {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.totalIncome, 0))}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="card-apple bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20">
+                    <div className="card-apple-content text-center">
+                      <p className="text-xs text-red-600 dark:text-red-400 mb-1">年度總支出</p>
+                      <p className="text-xl font-bold text-red-700 dark:text-red-300">
+                        {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.totalExpense, 0))}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`card-apple bg-gradient-to-br ${monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0) >= 0 ? 'from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20' : 'from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20'}`}>
+                    <div className="card-apple-content text-center">
+                      <p className={`text-xs mb-1 ${monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>年度淨利潤</p>
+                      <p className={`text-xl font-bold ${monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-orange-700 dark:text-orange-300'}`}>
+                        {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0))}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="card-apple bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                    <div className="card-apple-content text-center">
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">有數據月份</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                        {monthlyReportData.length} 個月
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 月度明細表格（精簡版 - 點擊查看詳細） */}
+                <div className="card-apple overflow-hidden">
+                  <div className="card-apple-content p-0">
+                    <div className="px-4 py-3 border-b border-border-light bg-bg-secondary">
+                      <h3 className="font-semibold text-text-primary flex items-center gap-2">
+                        <span>📊</span> {selectedYear} 年月度財務報告
+                      </h3>
+                      <p className="text-xs text-text-tertiary mt-1">
+                        點擊月份可查看詳細明細
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-bg-secondary border-b border-border-light">
+                            <th className="px-3 py-2 text-left font-semibold text-text-secondary">月份</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-600 dark:text-green-400">服務費收入</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-600 dark:text-green-400">銀行利息</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20">總收入</th>
+                            <th className="px-3 py-2 text-right font-semibold text-red-600 dark:text-red-400">護理人員工資</th>
+                            <th className="px-3 py-2 text-right font-semibold text-red-600 dark:text-red-400">營運開支</th>
+                            <th className="px-3 py-2 text-right font-semibold text-red-600 dark:text-red-400">普通佣金</th>
+                            <th className="px-3 py-2 text-right font-semibold text-red-600 dark:text-red-400">社區券佣金</th>
+                            <th className="px-3 py-2 text-right font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20">總支出</th>
+                            <th className="px-3 py-2 text-right font-semibold text-text-primary bg-bg-tertiary">淨利潤</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-light">
+                          {monthlyReportData.map((data) => {
+                            // 營運開支 = expenseBreakdown 總和 - 護理人員工資（護理人員工資單獨顯示）
+                            const operatingExpenses = Object.entries(data.expenseBreakdown)
+                              .filter(([key]) => key !== '護理人員工資')
+                              .reduce((sum, [, val]) => sum + val, 0)
+                            return (
+                              <tr 
+                                key={data.month} 
+                                className="hover:bg-bg-secondary/50 cursor-pointer"
+                                onClick={() => setSelectedReportMonth(data.month)}
+                              >
+                                <td className="px-3 py-2 text-text-primary font-medium">
+                                  <span className="hover:text-primary hover:underline">{data.displayMonth}</span>
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-green-600 dark:text-green-400">
+                                  {data.serviceFeeIncome > 0 ? formatCurrency(data.serviceFeeIncome) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-green-600 dark:text-green-400">
+                                  {data.bankInterestIncome > 0 ? formatCurrency(data.bankInterestIncome) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/10">
+                                  {formatCurrency(data.totalIncome)}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400">
+                                  {data.staffSalaryExpense > 0 ? formatCurrency(data.staffSalaryExpense) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400">
+                                  {operatingExpenses > 0 ? formatCurrency(operatingExpenses) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400">
+                                  {data.regularCommission > 0 ? formatCurrency(data.regularCommission) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400">
+                                  {data.voucherCommission > 0 ? formatCurrency(data.voucherCommission) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/10">
+                                  {formatCurrency(data.totalExpense)}
+                                </td>
+                                <td className={`px-3 py-2 text-right font-mono font-bold bg-bg-tertiary ${data.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                  {formatCurrency(data.netProfit)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot className="bg-bg-secondary border-t-2 border-border-light">
+                          <tr className="font-bold">
+                            <td className="px-3 py-3 text-text-primary">年度合計</td>
+                            <td className="px-3 py-3 text-right font-mono text-green-600 dark:text-green-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.serviceFeeIncome, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-green-600 dark:text-green-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.bankInterestIncome, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.totalIncome, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-red-600 dark:text-red-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.staffSalaryExpense, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-red-600 dark:text-red-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + Object.entries(d.expenseBreakdown).filter(([key]) => key !== '護理人員工資').reduce((s, [, v]) => s + v, 0), 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-red-600 dark:text-red-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.regularCommission, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-red-600 dark:text-red-400">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.voucherCommission, 0))}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20">
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.totalExpense, 0))}
+                            </td>
+                            <td className={`px-3 py-3 text-right font-mono bg-bg-tertiary ${monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {formatCurrency(monthlyReportData.reduce((sum, d) => sum + d.netProfit, 0))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>

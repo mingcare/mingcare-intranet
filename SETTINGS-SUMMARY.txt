@@ -1,0 +1,9 @@
+Settings summary (2026-02-03)
+
+- TypeScript: "ignoreDeprecations": "5.0" in tsconfig.json (keeps baseUrl warning silenced without breaking Next build).
+- Dev dependency updated: baseline-browser-mapping -> ^2.9.19.
+- package-lock.json synced with package.json to satisfy npm ci on GitHub.
+
+Run commands:
+- Local dev server: npm run dev
+- Production build: npm run build

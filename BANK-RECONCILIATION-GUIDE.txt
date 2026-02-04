@@ -172,7 +172,7 @@ Code location: /app/accounting/page.tsx
 | 2025-06 | ✅ $70,815.21 | ✅ $5,187.04 | 已加內部轉帳收入 IT-00001837/38/39 |
 | 2025-07 | ✅ $132,221.77 | ✅ $18,147.04 | 已加內部轉帳 IT-JUL-001; 3張跨月支票已移去8月 |
 | 2025-08 | ✅ $114,671.46 | ✅ $652.04 | 已加內部轉帳 IT-AUG-001; 已加遺漏income INC-AUG-001 $2,470 |
-| 2025-09 | 待對 | 待對 | |
+| 2025-09 | ✅ $180,669.99 | ✅ $1,492.04 | 修正53筆deduct_from_petty_cash; 加4筆IT-SEP; 加INC-SEP-001 $8,540 |
 | 2025-10 | 待對 | 待對 | |
 | 2025-11 | 待對 | 待對 | |
 | 2025-12 | 待對 | 待對 | |
@@ -505,6 +505,52 @@ await supabase.from('financial_transactions')
 | Month | Journal | Amount | Description | Bank Ref |
 |-------|---------|--------|-------------|----------|
 | Aug-25 | INC-AUG-001 | $2,470 | 余小姐 護理服務費用 | MS YU YUN CHI 2025-08-18 |
+| Sep-25 | INC-SEP-001 | $8,540 | 9月份服務費用 (OUTWARD CLEARING) | 30-Sep OUTWARD CLEARING |
+
+================================================================================
+16. deduct_from_petty_cash 問題
+================================================================================
+
+⚠️ 重要發現 (September 2025):
+
+問題: 53 筆 payment_method='銀行轉賬' 嘅記錄有 deduct_from_petty_cash=true，
+     導致唔會出現喺儲蓄戶口 view！
+
+原因: 
+- Intranet 儲蓄戶口 filter 排除 deduct_from_petty_cash=true 嘅記錄
+- 呢啲記錄係真正嘅銀行轉賬（收入/支出），應該係 false
+
+影響:
+- 儲蓄戶口 Income 少計 $387,920
+- 儲蓄戶口 Expense 少計 $277,340
+- 期末餘額差 $119,120
+
+修正方法:
+```javascript
+// 將所有 payment_method='銀行轉賬' 改為 deduct_from_petty_cash=false
+await supabase.from('financial_transactions')
+  .update({ deduct_from_petty_cash: false })
+  .gte('transaction_date', '2025-09-01')
+  .lte('transaction_date', '2025-09-30')
+  .eq('payment_method', '銀行轉賬')
+  .eq('deduct_from_petty_cash', true);
+```
+
+✅ 對帳 Checklist:
+1. 檢查 deduct_from_petty_cash 值是否正確
+2. payment_method='銀行轉賬' 應該係 deduct_from_petty_cash=false
+3. 除非係 Petty Cash 相關交易，否則唔應該係 true
+
+================================================================================
+17. September 2025 內部轉帳明細
+================================================================================
+
+| Journal | Date | Direction | Amount | Bank Ref |
+|---------|------|-----------|--------|----------|
+| IT-SEP-001/IN | 03-Sep | 儲蓄→支票 | $20,000 | EBICT50903269835 |
+| IT-SEP-002/IN | 05-Sep | 儲蓄→支票 | $1,600 | EBICT50905274998 |
+| IT-SEP-003/IN | 08-Sep | 儲蓄→支票 | $40,000 | EBICT50908277159 |
+| IT-SEP-004/IN | 11-Sep | 支票→儲蓄 (反向) | $24,430 | EBICT50911284111 |
 
 ================================================================================
 END OF FILE
