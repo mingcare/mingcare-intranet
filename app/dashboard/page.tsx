@@ -177,8 +177,8 @@ export default function Dashboard() {
           icon: '💵',
           title: `${timeLabel} ${dateLabel} 服務費收取提醒`,
           items: [
-            { name: '俊佳218', period: threeMonthsAgo.range },
-            { name: '醫點', period: threeMonthsAgo.range }
+            { name: '俊佳218', period: fourMonthsAgo.range },
+            { name: '醫點', period: fourMonthsAgo.range }
           ]
         }
       case 'commission':
@@ -933,9 +933,9 @@ export default function Dashboard() {
                     const isServiceFeeDay3 = d === 3; // Steven140/Steven200 收費日
                     const isServiceFeeDay5 = d === 5; // 俊佳218/醫點 收費日
                     
-                    // 服務費收取：3日收2個月前、5日收3個月前
+                    // 服務費收取：3日收2個月前、5日收4個月前
                     const twoMonthsAgoInfo = getMonthInfo(month - 2, year);
-                    const threeMonthsAgoInfo = getMonthInfo(month - 3, year);
+                    const fourMonthsAgoInfo = getMonthInfo(month - 4, year);
                     
                     days.push(
                       <div
@@ -972,18 +972,18 @@ export default function Dashboard() {
                           </div>
                         )}
                         
-                        {/* 5日服務費收取提示 - 俊佳218/醫點 */}
+                        {/* 5日服務費收取提示 - 俊佳218/醫點 (收4個月前) */}
                         {isServiceFeeDay5 && (
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[420px] p-4 rounded-2xl bg-bg-primary border border-border-light shadow-apple-hover opacity-0 invisible group-hover/day:opacity-100 group-hover/day:visible transition-all duration-200 z-50 pointer-events-none">
                             <div className="text-base font-bold text-text-primary mb-3">💵 服務費收取日</div>
                             <div className="grid grid-cols-2 gap-2">
                               <div className="p-2.5 rounded-xl bg-bg-secondary">
                                 <div className="text-sm font-semibold text-text-primary">俊佳218</div>
-                                <div className="text-xs text-text-secondary">{threeMonthsAgoInfo.range}</div>
+                                <div className="text-xs text-text-secondary">{fourMonthsAgoInfo.range}</div>
                               </div>
                               <div className="p-2.5 rounded-xl bg-bg-secondary">
                                 <div className="text-sm font-semibold text-text-primary">醫點</div>
-                                <div className="text-xs text-text-secondary">{threeMonthsAgoInfo.range}</div>
+                                <div className="text-xs text-text-secondary">{fourMonthsAgoInfo.range}</div>
                               </div>
                             </div>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
