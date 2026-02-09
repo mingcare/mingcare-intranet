@@ -1793,12 +1793,18 @@ export default function AccountingPage() {
           performed_by: currentUser
         })
         
-        // 更新 global_journal_sequence
+        // 更新 global_journal_sequence（包含手續費）
         await supabase
           .from('global_journal_sequence')
           .update({ last_number: parseInt(feeJournalNumber, 10) })
           .eq('id', 1)
       }
+    } else {
+      // 非銀行轉賬：也要更新 global_journal_sequence
+      await supabase
+        .from('global_journal_sequence')
+        .update({ last_number: parseInt(editingTransaction.journal_number, 10) })
+        .eq('id', 1)
     }
 
     setShowEditModal(false)
