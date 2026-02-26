@@ -5033,9 +5033,10 @@ export default function ServicesPage() {
       // 檢查是否為對數模式
       const isAccountingMode = exportMode === 'accounting'
 
-      // 獲取客戶的 CCSV 號碼（voucher_number）和 customer_id 的映射
+      // 獲取客戶的 CCSV 號碼（voucher_number）和身份證號碼（hkid）的映射
       const customerIds = [...new Set(records.map(r => r.customer_id).filter(Boolean))]
       const customerVoucherMap: Record<string, string> = {}
+      const customerHkidMap: Record<string, string> = {}
       const customerIdByName: Record<string, string> = {}
       if (customerIds.length > 0) {
         try {
@@ -5044,12 +5045,15 @@ export default function ServicesPage() {
             const batch = customerIds.slice(i, i + 100)
             const { data: customerData } = await supabase
               .from('customer_personal_data')
-              .select('customer_id, customer_name, voucher_number')
+              .select('customer_id, customer_name, voucher_number, hkid')
               .in('customer_id', batch)
             if (customerData) {
               customerData.forEach((c: any) => {
                 if (c.voucher_number) {
                   customerVoucherMap[c.customer_id] = c.voucher_number
+                }
+                if (c.hkid) {
+                  customerHkidMap[c.customer_id] = c.hkid
                 }
                 if (c.customer_name && c.customer_id) {
                   customerIdByName[c.customer_name] = c.customer_id
@@ -5058,7 +5062,7 @@ export default function ServicesPage() {
             }
           }
         } catch (err) {
-          console.error('獲取客戶 CCSV 號碼失敗:', err)
+          console.error('獲取客戶資料失敗:', err)
         }
       }
       // 也從 records 本身建立 customer_name → customer_id 映射
@@ -5154,11 +5158,12 @@ export default function ServicesPage() {
           totalProfit += customerProfitTotal
 
           // 生成客戶獨立表格
-          // 獲取該客戶的 customer_id 和 CCSV
+          // 獲取該客戶的身份證號碼和 CCSV
           const custId = customerIdByName[customerName] || customerRecords[0]?.customer_id || ''
+          const custHkid = custId ? (customerHkidMap[custId] || '') : ''
           const custCCSV = custId ? (customerVoucherMap[custId] || '') : ''
           const custInfoParts: string[] = []
-          if (custId) custInfoParts.push(custId)
+          if (custHkid) custInfoParts.push(`身份證: ${custHkid}`)
           if (custCCSV) custInfoParts.push(`CCSV: ${custCCSV}`)
           const custInfoStr = custInfoParts.length > 0 ? ` <span style="font-size: 13px; color: #666; font-weight: normal;">(${custInfoParts.join(' | ')})</span>` : ''
 
@@ -5478,9 +5483,10 @@ export default function ServicesPage() {
                     if (!seenCustomers.has(custKey)) {
                       seenCustomers.add(custKey)
                       const cId = record.customer_id || customerIdByName[custName] || ''
+                      const hkid = cId ? (customerHkidMap[cId] || '') : ''
                       const ccsv = cId ? (customerVoucherMap[cId] || '') : ''
                       const infoParts: string[] = []
-                      if (cId) infoParts.push(cId)
+                      if (hkid) infoParts.push(`身份證: ${hkid}`)
                       if (ccsv) infoParts.push(`CCSV: ${ccsv}`)
                       if (infoParts.length > 0) {
                         customerHeaderRow = `<tr style="background-color: #f0f7ff; border-top: 1px solid #428bca;">
@@ -5629,7 +5635,7 @@ export default function ServicesPage() {
         `
 
       } else {
-        // 非對數模式：普通表格 - 追蹤客戶首次出現以顯示ID/CCSV
+        // 非對數模式：普通表格 - 追蹤客戶首次出現以顯示身份證/CCSV
         const seenCustomersNormal = new Set<string>()
         tableContent = records.map(record => {
           const custName = record.customer_name || '未知客戶'
@@ -5638,9 +5644,10 @@ export default function ServicesPage() {
           if (!seenCustomersNormal.has(custKey)) {
             seenCustomersNormal.add(custKey)
             const cId = record.customer_id || customerIdByName[custName] || ''
+            const hkid = cId ? (customerHkidMap[cId] || '') : ''
             const ccsv = cId ? (customerVoucherMap[cId] || '') : ''
             const infoParts: string[] = []
-            if (cId) infoParts.push(cId)
+            if (hkid) infoParts.push(`身份證: ${hkid}`)
             if (ccsv) infoParts.push(`CCSV: ${ccsv}`)
             if (infoParts.length > 0) {
               customerHeaderRow = `<tr style="background-color: #f0f7ff; border-top: 1px solid #428bca;">
