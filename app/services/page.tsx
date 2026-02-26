@@ -5524,7 +5524,7 @@ export default function ServicesPage() {
                         return `<td class="${isNumber ? 'number' : ''}">${displayValue}</td>`
                       }).join('')}
                     </tr>
-                  `).join('')}
+                  `}).join('')}
                 </tbody>
               </table>
 
