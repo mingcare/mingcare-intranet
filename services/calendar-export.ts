@@ -59,7 +59,29 @@ export async function exportCalendar(options: CalendarExportOptions): Promise<Ca
     // 2. 轉換為日曆事件
     const events = convertToCalendarEvents(scheduleData.data, options)
 
-    return exportToPDF(events, scheduleData.data, options)
+    // 3. 如果不是用護理人員搜尋，獲取客戶身份證和CCSV資料
+    let customerInfoMap = new Map<string, { hkid: string; voucher_number: string }>()
+    if (!options.filters.careStaffName) {
+      const uniqueCustomerIds = Array.from(
+        new Set(scheduleData.data.map((r: BillingSalaryRecord) => r.customer_id).filter((id: string | undefined): id is string => Boolean(id)))
+      )
+      if (uniqueCustomerIds.length > 0) {
+        const { data: customerData } = await supabase
+          .from('customer_personal_data')
+          .select('customer_id, hkid, voucher_number')
+          .in('customer_id', uniqueCustomerIds)
+        if (customerData) {
+          customerData.forEach((c: { customer_id: string; hkid: string | null; voucher_number: string | null }) => {
+            customerInfoMap.set(c.customer_id, {
+              hkid: c.hkid || '',
+              voucher_number: c.voucher_number || ''
+            })
+          })
+        }
+      }
+    }
+
+    return exportToPDF(events, scheduleData.data, options, customerInfoMap)
 
   } catch (error) {
     console.error('❌ 日曆導出失敗:', error)
@@ -215,7 +237,8 @@ function convertToCalendarEvents(
 function exportToPDF(
   events: CalendarEvent[],
   records: BillingSalaryRecord[],
-  options: CalendarExportOptions
+  options: CalendarExportOptions,
+  customerInfoMap: Map<string, { hkid: string; voucher_number: string }> = new Map()
 ): CalendarExportResult {
   try {
     const sortedRecords = [...records].sort((a, b) => {
@@ -271,6 +294,35 @@ function exportToPDF(
 
     if (filters.careStaffName) {
       headerValues.push(`護理員 ${filters.careStaffName}`)
+    }
+
+    // 如果不是護理人員搜尋，顯示客戶身份證和CCSV
+    if (!filters.careStaffName && customerInfoMap.size > 0) {
+      if (uniqueCustomers.length === 1 && primaryRecord) {
+        // 單一客戶：直接在 header 顯示
+        const info = customerInfoMap.get(primaryRecord.customer_id)
+        if (info) {
+          if (info.hkid) headerValues.push(`身份證: ${info.hkid}`)
+          if (info.voucher_number) headerValues.push(`CCSV: ${info.voucher_number}`)
+        }
+      } else if (uniqueCustomers.length > 1) {
+        // 多位客戶：列出所有客戶的身份證和CCSV
+        const customerDetails: string[] = []
+        sortedRecords.forEach(record => {
+          if (record.customer_id && !customerDetails.some(d => d.startsWith(record.customer_name || ''))) {
+            const info = customerInfoMap.get(record.customer_id)
+            if (info && (info.hkid || info.voucher_number)) {
+              const parts = [record.customer_name || record.customer_id]
+              if (info.hkid) parts.push(`身份證: ${info.hkid}`)
+              if (info.voucher_number) parts.push(`CCSV: ${info.voucher_number}`)
+              customerDetails.push(parts.join(' / '))
+            }
+          }
+        })
+        if (customerDetails.length > 0) {
+          headerValues.push(customerDetails.join(' | '))
+        }
+      }
     }
 
     headerValues.push(
