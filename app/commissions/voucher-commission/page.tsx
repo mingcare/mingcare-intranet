@@ -484,7 +484,6 @@ export default function VoucherCommissionPage() {
               customerItems.forEach(item => {
                 tableRows += `
                   <tr>
-                    <td>${item.customer_id}</td>
                     <td>${item.customer_name}</td>
                     <td>${item.voucher_number || '-'}</td>
                     <td>${item.service_date}</td>
@@ -502,7 +501,7 @@ export default function VoucherCommissionPage() {
               const customerTotalCommission = customerItems.reduce((sum, i) => sum + i.commission_amount, 0)
               tableRows += `
                 <tr style="background-color: #f0f0f0; border-top: 2px solid #ccc;">
-                  <td colspan="3" style="font-weight: 500;">${customerItems[0].customer_name} 小結</td>
+                  <td colspan="2" style="font-weight: 500;">${customerItems[0].customer_name} 小結</td>
                   <td style="font-size: 10px; color: #666;">${customerItems.length} 次服務</td>
                   <td></td>
                   <td class="text-right" style="font-weight: 500;">${customerTotalHours.toFixed(1)}</td>
@@ -518,7 +517,6 @@ export default function VoucherCommissionPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>客戶編號</th>
                     <th>客戶姓名</th>
                     <th>CCSV 號碼</th>
                     <th>服務日期</th>
@@ -532,7 +530,7 @@ export default function VoucherCommissionPage() {
                 <tbody>
                   ${tableRows}
                   <tr class="summary-row">
-                    <td colspan="7">介紹人總計</td>
+                    <td colspan="6">介紹人總計</td>
                     <td class="text-right">$${groupTotal.toLocaleString()}</td>
                     <td class="text-right">$${groupCommission.toLocaleString()}</td>
                   </tr>
@@ -761,7 +759,6 @@ export default function VoucherCommissionPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-bg-secondary">
                     <tr>
-                      <th className="px-4 py-3 text-left font-medium text-text-secondary">客戶編號</th>
                       <th className="px-4 py-3 text-left font-medium text-text-secondary">客戶姓名</th>
                       <th className="px-4 py-3 text-left font-medium text-text-secondary">服務日期</th>
                       <th className="px-4 py-3 text-left font-medium text-text-secondary">服務類型</th>
@@ -796,7 +793,6 @@ export default function VoucherCommissionPage() {
                         customerItems.forEach((item, index) => {
                           rows.push(
                             <tr key={`${item.id}-${index}`} className="hover:bg-bg-secondary transition-colors">
-                              <td className="px-4 py-3 text-text-primary">{item.customer_id}</td>
                               <td className="px-4 py-3 text-text-primary">{item.customer_name}</td>
                               <td className="px-4 py-3 text-text-secondary">{item.service_date}</td>
                               <td className="px-4 py-3 text-text-secondary">{item.service_type}</td>
@@ -814,7 +810,7 @@ export default function VoucherCommissionPage() {
                         const customerTotalCommission = customerItems.reduce((sum, i) => sum + i.commission_amount, 0)
                         rows.push(
                           <tr key={`subtotal-${customerId}`} className="bg-gray-50 border-t-2 border-gray-200">
-                            <td colSpan={2} className="px-4 py-2 text-text-primary font-medium">
+                            <td className="px-4 py-2 text-text-primary font-medium">
                               {customerItems[0].customer_name} 小結
                             </td>
                             <td className="px-4 py-2 text-text-secondary text-sm">

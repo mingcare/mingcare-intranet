@@ -5033,6 +5033,41 @@ export default function ServicesPage() {
       // 檢查是否為對數模式
       const isAccountingMode = exportMode === 'accounting'
 
+      // 獲取客戶的 CCSV 號碼（voucher_number）和 customer_id 的映射
+      const customerIds = [...new Set(records.map(r => r.customer_id).filter(Boolean))]
+      const customerVoucherMap: Record<string, string> = {}
+      const customerIdByName: Record<string, string> = {}
+      if (customerIds.length > 0) {
+        try {
+          // 分批查詢
+          for (let i = 0; i < customerIds.length; i += 100) {
+            const batch = customerIds.slice(i, i + 100)
+            const { data: customerData } = await supabase
+              .from('customer_personal_data')
+              .select('customer_id, customer_name, voucher_number')
+              .in('customer_id', batch)
+            if (customerData) {
+              customerData.forEach((c: any) => {
+                if (c.voucher_number) {
+                  customerVoucherMap[c.customer_id] = c.voucher_number
+                }
+                if (c.customer_name && c.customer_id) {
+                  customerIdByName[c.customer_name] = c.customer_id
+                }
+              })
+            }
+          }
+        } catch (err) {
+          console.error('獲取客戶 CCSV 號碼失敗:', err)
+        }
+      }
+      // 也從 records 本身建立 customer_name → customer_id 映射
+      records.forEach(r => {
+        if (r.customer_name && r.customer_id && !customerIdByName[r.customer_name]) {
+          customerIdByName[r.customer_name] = r.customer_id
+        }
+      })
+
       let tableContent = ''
       let summaryContent = ''
 
@@ -5119,10 +5154,18 @@ export default function ServicesPage() {
           totalProfit += customerProfitTotal
 
           // 生成客戶獨立表格
+          // 獲取該客戶的 customer_id 和 CCSV
+          const custId = customerIdByName[customerName] || customerRecords[0]?.customer_id || ''
+          const custCCSV = custId ? (customerVoucherMap[custId] || '') : ''
+          const custInfoParts: string[] = []
+          if (custId) custInfoParts.push(custId)
+          if (custCCSV) custInfoParts.push(`CCSV: ${custCCSV}`)
+          const custInfoStr = custInfoParts.length > 0 ? ` <span style="font-size: 13px; color: #666; font-weight: normal;">(${custInfoParts.join(' | ')})</span>` : ''
+
           return `
             <div class="customer-group">
               <h3 style="color: #428bca; margin: 20px 0 10px 0; font-size: 16px; border-bottom: 1px solid #428bca; padding-bottom: 5px;">
-                ${customerName} (${customerRecords.length} 次服務)
+                ${customerName}${custInfoStr} (${customerRecords.length} 次服務)
               </h3>
               <table>
                 <thead>
@@ -5411,6 +5454,9 @@ export default function ServicesPage() {
           totalHours += staffHours
           totalSalary += staffSalary
 
+          // 追蹤已出現的客戶，用於顯示客戶ID/CCSV小標題
+          const seenCustomers = new Set<string>()
+
           return `
             <div class="staff-group">
               <div class="staff-header">
@@ -5425,7 +5471,26 @@ export default function ServicesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  ${staffRecords.map(record => `
+                  ${staffRecords.map(record => {
+                    const custName = record.customer_name || '未知客戶'
+                    const custKey = record.customer_id || custName
+                    let customerHeaderRow = ''
+                    if (!seenCustomers.has(custKey)) {
+                      seenCustomers.add(custKey)
+                      const cId = record.customer_id || customerIdByName[custName] || ''
+                      const ccsv = cId ? (customerVoucherMap[cId] || '') : ''
+                      const infoParts: string[] = []
+                      if (cId) infoParts.push(cId)
+                      if (ccsv) infoParts.push(`CCSV: ${ccsv}`)
+                      if (infoParts.length > 0) {
+                        customerHeaderRow = `<tr style="background-color: #f0f7ff; border-top: 1px solid #428bca;">
+                          <td colspan="${columns.length}" style="padding: 4px 8px; font-size: 11px; color: #2c5aa0; font-weight: 600;">
+                            📋 ${custName} — ${infoParts.join(' | ')}
+                          </td>
+                        </tr>`
+                      }
+                    }
+                    return `${customerHeaderRow}
                     <tr>
                       ${columns.map(col => {
                         const value = (record as any)[col] || ''
@@ -5564,8 +5629,28 @@ export default function ServicesPage() {
         `
 
       } else {
-        // 非對數模式：普通表格
-        tableContent = records.map(record => `
+        // 非對數模式：普通表格 - 追蹤客戶首次出現以顯示ID/CCSV
+        const seenCustomersNormal = new Set<string>()
+        tableContent = records.map(record => {
+          const custName = record.customer_name || '未知客戶'
+          const custKey = record.customer_id || custName
+          let customerHeaderRow = ''
+          if (!seenCustomersNormal.has(custKey)) {
+            seenCustomersNormal.add(custKey)
+            const cId = record.customer_id || customerIdByName[custName] || ''
+            const ccsv = cId ? (customerVoucherMap[cId] || '') : ''
+            const infoParts: string[] = []
+            if (cId) infoParts.push(cId)
+            if (ccsv) infoParts.push(`CCSV: ${ccsv}`)
+            if (infoParts.length > 0) {
+              customerHeaderRow = `<tr style="background-color: #f0f7ff; border-top: 1px solid #428bca;">
+                <td colspan="${columns.length}" style="padding: 4px 8px; font-size: 11px; color: #2c5aa0; font-weight: 600;">
+                  📋 ${custName} — ${infoParts.join(' | ')}
+                </td>
+              </tr>`
+            }
+          }
+          return `${customerHeaderRow}
           <tr>
             ${columns.map(col => {
               const value = getColumnValue(record, col)
@@ -5573,8 +5658,8 @@ export default function ServicesPage() {
 
               return `<td class="${isNumber ? 'number' : ''}">${value}</td>`
             }).join('')}
-          </tr>
-        `).join('')
+          </tr>`
+        }).join('')
       }
 
       const logoUrl = getAssetPath('images/mingcare-logo.png')
