@@ -1231,7 +1231,73 @@ export default function CareStaffPage() {
           </div>
         </div>
 
-        {/* TODO: 分頁控制 */}
+        {/* 分頁控制 */}
+        {totalCount > pageSize && (
+          <div className="card-apple mt-4">
+            <div className="card-apple-content">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-sm text-text-secondary">
+                  共 {totalCount} 位護理人員，第 {currentPage} / {Math.ceil(totalCount / pageSize)} 頁
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const newPage = currentPage - 1
+                      setCurrentPage(newPage)
+                      loadCareStaff(undefined, newPage)
+                    }}
+                    disabled={currentPage <= 1}
+                    className="px-3 py-1.5 text-sm rounded-apple-sm border border-border-light bg-bg-primary hover:bg-bg-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← 上一頁
+                  </button>
+                  {(() => {
+                    const totalPages = Math.ceil(totalCount / pageSize)
+                    const pages: (number | string)[] = []
+                    for (let i = 1; i <= totalPages; i++) {
+                      if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                        pages.push(i)
+                      } else if (pages[pages.length - 1] !== '...') {
+                        pages.push('...')
+                      }
+                    }
+                    return pages.map((p, idx) =>
+                      typeof p === 'number' ? (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setCurrentPage(p)
+                            loadCareStaff(undefined, p)
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-apple-sm border transition-colors ${
+                            p === currentPage
+                              ? 'bg-primary text-white border-primary'
+                              : 'border-border-light bg-bg-primary hover:bg-bg-secondary'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ) : (
+                        <span key={idx} className="px-1 text-text-tertiary">...</span>
+                      )
+                    )
+                  })()}
+                  <button
+                    onClick={() => {
+                      const newPage = currentPage + 1
+                      setCurrentPage(newPage)
+                      loadCareStaff(undefined, newPage)
+                    }}
+                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                    className="px-3 py-1.5 text-sm rounded-apple-sm border border-border-light bg-bg-primary hover:bg-bg-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    下一頁 →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 編輯 Drawer */}
         {isDrawerOpen && editingStaff && (

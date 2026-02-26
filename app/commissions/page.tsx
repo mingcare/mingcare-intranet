@@ -18,6 +18,7 @@ interface CustomerData {
   customer_name: string
   introducer: string
   customer_type: string
+  voucher_number?: string
 }
 
 interface BillingData {
@@ -36,6 +37,7 @@ interface MonthlyStatsData {
   monthly_hours: number
   monthly_fee: number
   first_service_date: string
+  voucher_number?: string
 }
 
 interface CustomerCommissionData {
@@ -49,6 +51,7 @@ interface CustomerCommissionData {
   month_sequence: number
   commission_amount: number
   first_service_date: string
+  voucher_number?: string
 }
 
 interface IntroducerSummary {
@@ -206,6 +209,7 @@ export default function CommissionsPage() {
           allCustomers: monthData.map(customer => ({
             customerName: customer.customer_name,
             customerId: customer.customer_id,
+            voucherNumber: customer.voucher_number || '',
             introducer: customer.introducer,
             hours: customer.monthly_hours,
             fee: customer.monthly_fee,
@@ -574,6 +578,7 @@ export default function CommissionsPage() {
                     <tr>
                       <th>客戶編號</th>
                       <th>客戶姓名</th>
+                      <th>CCSV 號碼</th>
                       <th>介紹人</th>
                       <th>服務時數</th>
                       <th>服務費用</th>
@@ -586,6 +591,7 @@ export default function CommissionsPage() {
                       <tr class="${customer.isQualified ? 'qualified' : 'not-qualified'}">
                         <td>${customer.customerId}</td>
                         <td>${customer.customerName}</td>
+                        <td>${customer.voucherNumber || '-'}</td>
                         <td>${customer.introducer}</td>
                         <td class="number">${customer.hours.toFixed(1)} 小時</td>
                         <td class="number">$${customer.fee.toLocaleString()}</td>
@@ -756,7 +762,8 @@ export default function CommissionsPage() {
           customer_id,
           customer_name,
           introducer,
-          customer_type
+          customer_type,
+          voucher_number
         `)
         .eq('customer_type', '社區券客戶')
 
@@ -905,7 +912,8 @@ export default function CommissionsPage() {
               service_month: serviceMonth,
               monthly_hours: 0,
               monthly_fee: 0,
-              first_service_date: billing.service_date
+              first_service_date: billing.service_date,
+              voucher_number: customer.voucher_number || ''
             })
           }
 

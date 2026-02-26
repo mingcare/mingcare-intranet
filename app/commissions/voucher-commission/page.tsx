@@ -32,6 +32,7 @@ interface VoucherCommissionDetail {
   id: string
   customer_id: string
   customer_name: string
+  voucher_number: string
   service_date: string
   service_type: string
   service_hours: number
@@ -45,6 +46,7 @@ interface VoucherCommissionDetail {
 interface VoucherCommissionSummary {
   customer_id: string
   customer_name: string
+  voucher_number: string
   service_type: string
   total_hours: number
   voucher_rate: number
@@ -196,15 +198,19 @@ export default function VoucherCommissionPage() {
       // 獲取客戶的介紹人信息
       const { data: customers, error: custError } = await supabase
         .from('customer_personal_data')
-        .select('customer_id, introducer')
+        .select('customer_id, introducer, voucher_number')
 
       if (custError) throw custError
 
       // 建立客戶->介紹人映射
       const customerIntroducerMap = new Map<string, string>()
-      customers?.forEach((c: { customer_id: string; introducer: string | null }) => {
+      const customerVoucherMap = new Map<string, string>()
+      customers?.forEach((c: { customer_id: string; introducer: string | null; voucher_number: string | null }) => {
         if (c.introducer) {
           customerIntroducerMap.set(c.customer_id, c.introducer)
+        }
+        if (c.voucher_number) {
+          customerVoucherMap.set(c.customer_id, c.voucher_number)
         }
       })
 
@@ -311,6 +317,7 @@ export default function VoucherCommissionPage() {
           id: record.id,
           customer_id: record.customer_id,
           customer_name: record.customer_name || '',
+          voucher_number: customerVoucherMap.get(record.customer_id) || '',
           service_date: record.service_date,
           service_type: record.service_type || record.project_category || '未分類',
           service_hours: hours,
@@ -345,6 +352,7 @@ export default function VoucherCommissionPage() {
           groupedData.set(key, {
             customer_id: record.customer_id,
             customer_name: record.customer_name,
+            voucher_number: record.voucher_number,
             service_type: record.service_type,
             total_hours: record.service_hours,
             voucher_rate: record.voucher_rate,
@@ -478,6 +486,7 @@ export default function VoucherCommissionPage() {
                   <tr>
                     <td>${item.customer_id}</td>
                     <td>${item.customer_name}</td>
+                    <td>${item.voucher_number || '-'}</td>
                     <td>${item.service_date}</td>
                     <td>${item.service_type}</td>
                     <td class="text-right">${item.service_hours.toFixed(1)}</td>
@@ -493,7 +502,7 @@ export default function VoucherCommissionPage() {
               const customerTotalCommission = customerItems.reduce((sum, i) => sum + i.commission_amount, 0)
               tableRows += `
                 <tr style="background-color: #f0f0f0; border-top: 2px solid #ccc;">
-                  <td colspan="2" style="font-weight: 500;">${customerItems[0].customer_name} 小結</td>
+                  <td colspan="3" style="font-weight: 500;">${customerItems[0].customer_name} 小結</td>
                   <td style="font-size: 10px; color: #666;">${customerItems.length} 次服務</td>
                   <td></td>
                   <td class="text-right" style="font-weight: 500;">${customerTotalHours.toFixed(1)}</td>
@@ -511,6 +520,7 @@ export default function VoucherCommissionPage() {
                   <tr>
                     <th>客戶編號</th>
                     <th>客戶姓名</th>
+                    <th>CCSV 號碼</th>
                     <th>服務日期</th>
                     <th>服務類型</th>
                     <th class="text-right">時數</th>
@@ -522,7 +532,7 @@ export default function VoucherCommissionPage() {
                 <tbody>
                   ${tableRows}
                   <tr class="summary-row">
-                    <td colspan="6">介紹人總計</td>
+                    <td colspan="7">介紹人總計</td>
                     <td class="text-right">$${groupTotal.toLocaleString()}</td>
                     <td class="text-right">$${groupCommission.toLocaleString()}</td>
                   </tr>
