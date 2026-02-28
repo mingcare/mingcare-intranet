@@ -2296,17 +2296,23 @@ function ScheduleTab({
           .map(s => s.customer_name)
           .filter((name): name is string => Boolean(name && name.trim()))
       ))
+      const customerIds = Array.from(new Set(
+        allSavedSchedules
+          .map(s => s.customer_id)
+          .filter((id): id is string => Boolean(id && id.trim()))
+      ))
 
       // 計算日期範圍
       const allDates = Object.keys(filteredSchedules).sort()
       const dateRangeStart = allDates[0] || ''
       const dateRangeEnd = allDates[allDates.length - 1] || ''
 
-      // 儲存資訊以供導出使用
+      // 儲存資訊以供導出使用 - 只導出剛才儲存的客戶
       setSavedStaffNames(staffNames)
       setSavedCustomerNames(customerNames)
       setSavedScheduleFilters({
         dateRange: { start: dateRangeStart, end: dateRangeEnd },
+        selectedCustomerIds: customerIds.length > 0 ? customerIds : undefined,
         ...(selectedCustomerFilter !== 'all' ? { searchTerm: selectedCustomerFilter } : {})
       })
 
