@@ -26,6 +26,8 @@ export interface CalendarExportOptions {
   includeStaffDetails?: boolean
   includeCustomerDetails?: boolean
   timezone?: string
+  nameMode?: 'customer' | 'staff'  // PDF 檔案名稱使用客戶名稱或護理人員名稱
+  selectedStaffName?: string        // 選定的護理人員名稱（多位時由使用者選擇）
 }
 
 export interface CalendarExportResult {
@@ -278,11 +280,21 @@ function exportToPDF(
       new Set(sortedRecords.map(record => record.customer_name).filter((name): name is string => Boolean(name)))
     )
 
+    const uniqueStaff = Array.from(
+      new Set(sortedRecords.map(record => record.care_staff_name).filter((name): name is string => Boolean(name)))
+    )
+
+    const isStaffMode = options.nameMode === 'staff'
+
     const customerLabel = uniqueCustomers.length === 0
       ? '全部客戶'
       : uniqueCustomers.length === 1
         ? uniqueCustomers[0]
         : `${uniqueCustomers[0]} 等 ${uniqueCustomers.length} 位客戶`
+
+    const staffLabel = isStaffMode
+      ? (options.selectedStaffName || (uniqueStaff.length === 1 ? uniqueStaff[0] : `${uniqueStaff[0] || '護理員'} 等 ${uniqueStaff.length} 位護理員`))
+      : ''
 
     const primaryRecord = sortedRecords.find(record => record.customer_name) || sortedRecords[0]
     const primaryCustomerName = primaryRecord?.customer_name || '全部客戶'
@@ -290,9 +302,11 @@ function exportToPDF(
 
     const totalHours = sortedRecords.reduce((sum, record) => sum + (record.service_hours || 0), 0)
 
-    const headerValues: string[] = [customerLabel, rangeLabel]
+    const headerValues: string[] = isStaffMode
+      ? [staffLabel, customerLabel, rangeLabel]
+      : [customerLabel, rangeLabel]
 
-    if (filters.careStaffName) {
+    if (filters.careStaffName && !isStaffMode) {
       headerValues.push(`護理員 ${filters.careStaffName}`)
     }
 
@@ -335,7 +349,13 @@ function exportToPDF(
       .map(item => escapeHtmlWithNbsp(item))
       .join('<span class="info-separator">·</span>')
 
-    const filenameBase = `${sanitizeForFilename(primaryCustomerName)}${sanitizeForFilename(monthLabel)}更表-${sanitizeForFilename(primaryCustomerId)}-明家居家護理服務`
+    const filenameDisplayName = isStaffMode
+      ? sanitizeForFilename(options.selectedStaffName || uniqueStaff[0] || primaryCustomerName)
+      : sanitizeForFilename(primaryCustomerName)
+    const filenameIdPart = isStaffMode
+      ? sanitizeForFilename(options.selectedStaffName || uniqueStaff[0] || '護理員')
+      : sanitizeForFilename(primaryCustomerId)
+    const filenameBase = `${filenameDisplayName}${sanitizeForFilename(monthLabel)}更表-${filenameIdPart}-明家居家護理服務`
     const estimatedPages = Math.max(1, Math.ceil(events.length / 10))
     const filenameWithPages = `${filenameBase} (${estimatedPages}).pdf`
     const pageTitle = filenameWithPages.replace(/\.pdf$/, '')

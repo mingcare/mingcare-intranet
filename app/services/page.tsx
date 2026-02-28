@@ -1958,6 +1958,16 @@ function ScheduleTab({
   // 社區券統計更新觸發器
   const [voucherUpdateTrigger, setVoucherUpdateTrigger] = useState(0)
 
+  // 儲存後導出日曆提示狀態
+  const [showExportPrompt, setShowExportPrompt] = useState(false)
+  const [exportPromptStep, setExportPromptStep] = useState<'ask' | 'nameMode' | 'staffPicker'>('ask')
+  const [exportNameMode, setExportNameMode] = useState<'customer' | 'staff'>('customer')
+  const [savedScheduleFilters, setSavedScheduleFilters] = useState<BillingSalaryFilters | null>(null)
+  const [savedStaffNames, setSavedStaffNames] = useState<string[]>([])
+  const [savedCustomerNames, setSavedCustomerNames] = useState<string[]>([])
+  const [selectedExportStaff, setSelectedExportStaff] = useState<string>('')
+  const [exportingCalendar, setExportingCalendar] = useState(false)
+
   // 當 filters 的日期範圍變化時，自動跳轉月曆到對應月份
   useEffect(() => {
     if (filters.dateRange?.start) {
@@ -2274,7 +2284,39 @@ function ScheduleTab({
         })
       }
 
+      // 收集已儲存排程的客戶和護理員資訊
+      const allSavedSchedules = Object.values(filteredSchedules).flat()
+      const staffNames = Array.from(new Set(
+        allSavedSchedules
+          .map(s => s.care_staff_name)
+          .filter((name): name is string => Boolean(name && name.trim()))
+      ))
+      const customerNames = Array.from(new Set(
+        allSavedSchedules
+          .map(s => s.customer_name)
+          .filter((name): name is string => Boolean(name && name.trim()))
+      ))
+
+      // 計算日期範圍
+      const allDates = Object.keys(filteredSchedules).sort()
+      const dateRangeStart = allDates[0] || ''
+      const dateRangeEnd = allDates[allDates.length - 1] || ''
+
+      // 儲存資訊以供導出使用
+      setSavedStaffNames(staffNames)
+      setSavedCustomerNames(customerNames)
+      setSavedScheduleFilters({
+        dateRange: { start: dateRangeStart, end: dateRangeEnd },
+        ...(selectedCustomerFilter !== 'all' ? { searchTerm: selectedCustomerFilter } : {})
+      })
+
       alert(`成功儲存 ${customerInfo} 的 ${filteredTotal} 個排程到資料庫！`)
+
+      // 儲存成功後彈出導出日曆提示
+      setExportPromptStep('ask')
+      setExportNameMode('customer')
+      setSelectedExportStaff('')
+      setShowExportPrompt(true)
 
     } catch (error) {
       console.error('儲存本地排程失敗:', error)
@@ -2282,6 +2324,68 @@ function ScheduleTab({
       alert(`儲存排程時發生錯誤: ${errorMessage}`)
     } finally {
       setFormSubmitting(false)
+    }
+  }
+
+  // 處理導出名稱模式選擇
+  const handleNameModeSelect = (mode: 'customer' | 'staff') => {
+    setExportNameMode(mode)
+    if (mode === 'staff' && savedStaffNames.length > 1) {
+      // 多位護理員，彈出選擇
+      setExportPromptStep('staffPicker')
+    } else if (mode === 'staff' && savedStaffNames.length === 1) {
+      // 只有一位護理員，直接用
+      setSelectedExportStaff(savedStaffNames[0])
+      handleExportAfterSaveWithParams(savedScheduleFilters!, 'staff', savedStaffNames[0])
+    } else {
+      // 客戶名稱模式，直接導出
+      handleExportAfterSaveWithParams(savedScheduleFilters!, 'customer', '')
+    }
+  }
+
+  // 帶參數的導出（避免狀態延遲問題）
+  const handleExportAfterSaveWithParams = async (
+    exportFilters: BillingSalaryFilters,
+    nameMode: 'customer' | 'staff',
+    staffName: string
+  ) => {
+    setExportingCalendar(true)
+    try {
+      const exportOptions: CalendarExportOptions = {
+        format: 'pdf',
+        filters: exportFilters,
+        includeStaffDetails: true,
+        includeCustomerDetails: false,
+        timezone: 'Asia/Hong_Kong',
+        nameMode: nameMode,
+        selectedStaffName: nameMode === 'staff' ? staffName : undefined
+      }
+
+      const result = await exportCalendar(exportOptions)
+
+      if (result.success && result.data) {
+        const htmlContent = result.data as string
+        const viewer = window.open('', '_blank')
+        if (viewer && viewer.document) {
+          viewer.opener = null
+          viewer.document.open()
+          viewer.document.write(htmlContent)
+          viewer.document.close()
+        } else {
+          const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
+          const url = URL.createObjectURL(blob)
+          window.location.href = url
+          setTimeout(() => URL.revokeObjectURL(url), 60_000)
+        }
+        setShowExportPrompt(false)
+      } else {
+        alert(`日曆導出失敗: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('日曆導出錯誤:', error)
+      alert('日曆導出失敗，請稍後再試')
+    } finally {
+      setExportingCalendar(false)
     }
   }
 
@@ -3030,6 +3134,188 @@ function ScheduleTab({
             <div className="p-3 border-t border-border-light bg-bg-secondary text-xs text-text-secondary">
               💡 選擇客戶後，點擊月曆日期新增排班時會自動填入客戶資料
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 儲存後導出日曆 PDF 提示彈窗 */}
+      {showExportPrompt && (
+        <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center" onClick={() => setShowExportPrompt(false)}>
+          <div className="bg-white rounded-2xl w-[90%] max-w-md overflow-hidden shadow-2xl z-[10002] animate-in fade-in zoom-in-95 relative" onClick={e => e.stopPropagation()}>
+            
+            {/* Step 1: 問是否要導出 */}
+            {exportPromptStep === 'ask' && (
+              <>
+                <div className="p-6 pb-2 text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">✅</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-text-primary mb-2">排程儲存成功！</h3>
+                  <p className="text-sm text-text-secondary">
+                    {savedCustomerNames.length > 0 && (
+                      <span className="block mb-1">
+                        客戶：{savedCustomerNames.length <= 2 ? savedCustomerNames.join('、') : `${savedCustomerNames[0]} 等 ${savedCustomerNames.length} 位`}
+                      </span>
+                    )}
+                    需要導出剛才入更的日曆 PDF 嗎？
+                  </p>
+                </div>
+                <div className="p-4 flex gap-3">
+                  <button
+                    onClick={() => setShowExportPrompt(false)}
+                    className="flex-1 px-4 py-3 rounded-xl border border-border-light text-text-secondary hover:bg-bg-secondary transition-all duration-200 font-medium"
+                  >
+                    唔需要
+                  </button>
+                  <button
+                    onClick={() => setExportPromptStep('nameMode')}
+                    className="flex-1 px-4 py-3 rounded-xl bg-primary text-white hover:bg-primary/90 transition-all duration-200 font-medium shadow-lg shadow-primary/25"
+                  >
+                    要，導出 PDF
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: 選擇 PDF 檔案名稱模式 */}
+            {exportPromptStep === 'nameMode' && (
+              <>
+                <div className="p-6 pb-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <button
+                      onClick={() => setExportPromptStep('ask')}
+                      className="p-1 hover:bg-bg-secondary rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h3 className="text-lg font-bold text-text-primary">PDF 檔案名稱</h3>
+                  </div>
+                  <p className="text-sm text-text-secondary mb-4">
+                    請選擇 PDF 檔案名稱使用邊個名稱：
+                  </p>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleNameModeSelect('customer')}
+                      disabled={exportingCalendar}
+                      className="w-full p-4 rounded-xl border-2 border-border-light hover:border-primary hover:bg-primary/5 transition-all duration-200 text-left group disabled:opacity-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                          <span className="text-xl">👤</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-text-primary">客戶名稱</div>
+                          <div className="text-xs text-text-secondary mt-0.5">
+                            {savedCustomerNames.length > 0
+                              ? `例如：${savedCustomerNames[0]} ...更表`
+                              : '以客戶名稱作為檔案名稱'}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleNameModeSelect('staff')}
+                      disabled={exportingCalendar}
+                      className="w-full p-4 rounded-xl border-2 border-border-light hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 text-left group disabled:opacity-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                          <span className="text-xl">👨‍⚕️</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-text-primary">護理人員名稱</div>
+                          <div className="text-xs text-text-secondary mt-0.5">
+                            {savedStaffNames.length > 0
+                              ? `例如：${savedStaffNames[0]} ...更表${savedStaffNames.length > 1 ? `（共 ${savedStaffNames.length} 位）` : ''}`
+                              : '以護理人員名稱作為檔案名稱'}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 pt-2">
+                  <button
+                    onClick={() => setShowExportPrompt(false)}
+                    className="w-full px-4 py-2 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+
+                {/* 導出中遮罩 */}
+                {exportingCalendar && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-3 border-primary border-t-transparent mx-auto mb-2"></div>
+                      <p className="text-sm text-text-secondary">正在產生日曆 PDF...</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Step 3: 選擇護理人員（多位時） */}
+            {exportPromptStep === 'staffPicker' && (
+              <>
+                <div className="p-6 pb-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <button
+                      onClick={() => setExportPromptStep('nameMode')}
+                      className="p-1 hover:bg-bg-secondary rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h3 className="text-lg font-bold text-text-primary">選擇護理人員</h3>
+                  </div>
+                  <p className="text-sm text-text-secondary mb-4">
+                    排程中有 {savedStaffNames.length} 位護理人員，請選擇要用邊位嘅名稱：
+                  </p>
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+                    {savedStaffNames.map((staffName, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setSelectedExportStaff(staffName)
+                          handleExportAfterSaveWithParams(savedScheduleFilters!, 'staff', staffName)
+                        }}
+                        disabled={exportingCalendar}
+                        className="w-full p-3 rounded-xl border border-border-light hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 text-left flex items-center gap-3 disabled:opacity-50"
+                      >
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm">👨‍⚕️</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-text-primary text-sm">{staffName}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-4 pt-2">
+                  <button
+                    onClick={() => setShowExportPrompt(false)}
+                    className="w-full px-4 py-2 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+
+                {/* 導出中遮罩 */}
+                {exportingCalendar && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-3 border-primary border-t-transparent mx-auto mb-2"></div>
+                      <p className="text-sm text-text-secondary">正在產生日曆 PDF...</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
