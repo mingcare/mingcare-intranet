@@ -2310,11 +2310,25 @@ function ScheduleTab({
       // 儲存資訊以供導出使用 - 只導出剛才儲存的客戶
       setSavedStaffNames(staffNames)
       setSavedCustomerNames(customerNames)
-      setSavedScheduleFilters({
+
+      // 構建導出篩選條件 - 確保只包含剛才儲存的客戶
+      const exportFilterForSaved: BillingSalaryFilters = {
         dateRange: { start: dateRangeStart, end: dateRangeEnd },
-        selectedCustomerIds: customerIds.length > 0 ? customerIds : undefined,
-        ...(selectedCustomerFilter !== 'all' ? { searchTerm: selectedCustomerFilter } : {})
-      })
+      }
+      // 優先用 customer_id 篩選，其次用客戶名稱
+      if (customerIds.length > 0) {
+        exportFilterForSaved.selectedCustomerIds = customerIds
+      } else if (customerNames.length === 1) {
+        // 只有一位客戶，用名稱搜尋
+        exportFilterForSaved.searchTerm = customerNames[0]
+      } else if (selectedCustomerFilter !== 'all') {
+        // 特定客戶篩選
+        exportFilterForSaved.searchTerm = selectedCustomerFilter
+      } else if (customerNames.length > 0) {
+        // 多位客戶但無 ID，用第一位名稱（至少限縮結果）
+        exportFilterForSaved.searchTerm = customerNames[0]
+      }
+      setSavedScheduleFilters(exportFilterForSaved)
 
       alert(`成功儲存 ${customerInfo} 的 ${filteredTotal} 個排程到資料庫！`)
 
@@ -2357,9 +2371,16 @@ function ScheduleTab({
   ) => {
     setExportingCalendar(true)
     try {
+      // 如果選擇護理人員模式，加上護理人員篩選
+      const filtersToUse: BillingSalaryFilters = nameMode === 'staff' && staffName
+        ? { ...exportFilters, careStaffName: staffName }
+        : exportFilters
+
+      console.log('📅 導出日曆 - 篩選條件:', JSON.stringify(filtersToUse, null, 2))
+
       const exportOptions: CalendarExportOptions = {
         format: 'pdf',
-        filters: exportFilters,
+        filters: filtersToUse,
         includeStaffDetails: true,
         includeCustomerDetails: false,
         timezone: 'Asia/Hong_Kong',
