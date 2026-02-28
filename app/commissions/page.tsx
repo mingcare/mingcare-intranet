@@ -133,12 +133,12 @@ export default function CommissionsPage() {
           return sum + (item.commission_amount || 0)
         }, 0)
 
-        // 累加到總計
-        totalServiceFee += monthServiceFee
-        totalServiceHours += monthServiceHours
+        // 累加到總計 - 使用 Math.round 修復浮點數精度問題
+        totalServiceFee = Math.round((totalServiceFee + monthServiceFee) * 100) / 100
+        totalServiceHours = Math.round((totalServiceHours + monthServiceHours) * 100) / 100
         totalQualifiedCustomers += monthQualifiedCount
         totalUnqualifiedCustomers += monthUnqualifiedCount
-        totalCommission += monthCommission
+        totalCommission = Math.round((totalCommission + monthCommission) * 100) / 100
 
         // 收集所有介紹人（只計算有佣金率設定的）
         Array.from(introducerGroups.keys()).forEach((introducerName: string) => {
@@ -252,8 +252,8 @@ export default function CommissionsPage() {
         }
         
         const customer = customerMap.get(key)!
-        customer.total_fee += item.monthly_fee
-        customer.total_commission += item.commission_amount
+        customer.total_fee = Math.round((customer.total_fee + item.monthly_fee) * 100) / 100
+        customer.total_commission = Math.round((customer.total_commission + item.commission_amount) * 100) / 100
       })
 
       // 再按介紹人匯總
@@ -282,8 +282,8 @@ export default function CommissionsPage() {
           } else {
             summary.unqualifiedCustomers += 1
           }
-          summary.totalServiceFee += customer.total_fee
-          summary.totalCommission += customer.total_commission
+          summary.totalServiceFee = Math.round((summary.totalServiceFee + customer.total_fee) * 100) / 100
+          summary.totalCommission = Math.round((summary.totalCommission + customer.total_commission) * 100) / 100
         }
       })
 
@@ -918,8 +918,8 @@ export default function CommissionsPage() {
           }
 
           const existing = monthlyStats.get(key)
-          existing.monthly_hours += Number(billing.service_hours) || 0
-          existing.monthly_fee += Number(billing.service_fee) || 0
+          existing.monthly_hours = Math.round((existing.monthly_hours + (Number(billing.service_hours) || 0)) * 100) / 100
+          existing.monthly_fee = Math.round((existing.monthly_fee + (Number(billing.service_fee) || 0)) * 100) / 100
           
           if (billing.service_date < existing.first_service_date) {
             existing.first_service_date = billing.service_date
@@ -995,7 +995,7 @@ export default function CommissionsPage() {
         summary.customers.push(result)
         
         // 只有達標才計算佣金
-        summary.total_commission += result.commission_amount
+        summary.total_commission = Math.round((summary.total_commission + result.commission_amount) * 100) / 100
         
         if (result.month_sequence === 1) {
           summary.first_month_count++
@@ -1101,7 +1101,7 @@ export default function CommissionsPage() {
     summary.customers.push(result)
     
     if (result.is_qualified) {
-      summary.total_commission += result.commission_amount
+      summary.total_commission = Math.round((summary.total_commission + result.commission_amount) * 100) / 100
       if (result.month_sequence === 1) {
         summary.first_month_count++
       } else {

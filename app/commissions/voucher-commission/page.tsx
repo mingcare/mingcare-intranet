@@ -351,9 +351,9 @@ export default function VoucherCommissionPage() {
         const key = `${record.customer_id}-${record.service_type}-${record.introducer}`
         const existing = groupedData.get(key)
         if (existing) {
-          existing.total_hours += record.service_hours
-          existing.voucher_total += record.voucher_total
-          existing.commission_amount += record.commission_amount
+          existing.total_hours = Math.round((existing.total_hours + record.service_hours) * 100) / 100
+          existing.voucher_total = Math.round((existing.voucher_total + record.voucher_total) * 100) / 100
+          existing.commission_amount = Math.round((existing.commission_amount + record.commission_amount) * 100) / 100
         } else {
           groupedData.set(key, {
             customer_id: record.customer_id,
@@ -378,10 +378,10 @@ export default function VoucherCommissionPage() {
     }
   }
 
-  // 計算總計 - 使用詳細記錄
-  const totalVoucherAmount = detailData.reduce((sum, item) => sum + item.voucher_total, 0)
-  const totalCommission = detailData.reduce((sum, item) => sum + item.commission_amount, 0)
-  const totalHours = detailData.reduce((sum, item) => sum + item.service_hours, 0)
+  // 計算總計 - 使用 Math.round 修復浮點數精度問題
+  const totalVoucherAmount = Math.round(detailData.reduce((sum, item) => sum + item.voucher_total, 0) * 100) / 100
+  const totalCommission = Math.round(detailData.reduce((sum, item) => sum + item.commission_amount, 0) * 100) / 100
+  const totalHours = Math.round(detailData.reduce((sum, item) => sum + item.service_hours, 0) * 100) / 100
 
   // 按介紹人分組詳細記錄
   const groupDetailByIntroducer = () => {
@@ -462,9 +462,9 @@ export default function VoucherCommissionPage() {
           </div>
           
           ${Array.from(introducerDetailGroups.entries()).map(([introducer, items]) => {
-            const groupTotal = items.reduce((sum, item) => sum + item.voucher_total, 0)
-            const groupCommission = items.reduce((sum, item) => sum + item.commission_amount, 0)
-            const groupHours = items.reduce((sum, item) => sum + item.service_hours, 0)
+            const groupTotal = Math.round(items.reduce((sum, item) => sum + item.voucher_total, 0) * 100) / 100
+            const groupCommission = Math.round(items.reduce((sum, item) => sum + item.commission_amount, 0) * 100) / 100
+            const groupHours = Math.round(items.reduce((sum, item) => sum + item.service_hours, 0) * 100) / 100
             const commRate = commissionRates.find(r => r.introducer === introducer)
             // 按客戶編號排序
             const sortedItems = [...items].sort((a, b) => {
@@ -502,9 +502,9 @@ export default function VoucherCommissionPage() {
                 `
               })
               // 添加客戶小結
-              const customerTotalHours = customerItems.reduce((sum, i) => sum + i.service_hours, 0)
-              const customerTotalVoucher = customerItems.reduce((sum, i) => sum + i.voucher_total, 0)
-              const customerTotalCommission = customerItems.reduce((sum, i) => sum + i.commission_amount, 0)
+              const customerTotalHours = Math.round(customerItems.reduce((sum, i) => sum + i.service_hours, 0) * 100) / 100
+              const customerTotalVoucher = Math.round(customerItems.reduce((sum, i) => sum + i.voucher_total, 0) * 100) / 100
+              const customerTotalCommission = Math.round(customerItems.reduce((sum, i) => sum + i.commission_amount, 0) * 100) / 100
               tableRows += `
                 <tr style="background-color: #f0f0f0; border-top: 2px solid #ccc;">
                   <td colspan="2" style="font-weight: 500;">${customerItems[0].customer_name} 小結${customerItems[0].hkid ? ` (身份證: ${customerItems[0].hkid})` : ''}</td>
@@ -725,9 +725,9 @@ export default function VoucherCommissionPage() {
 
         {/* 按介紹人分組顯示每筆服務記錄 */}
         {Array.from(introducerDetailGroups.entries()).map(([introducer, items]) => {
-          const groupTotal = items.reduce((sum, item) => sum + item.voucher_total, 0)
-          const groupCommission = items.reduce((sum, item) => sum + item.commission_amount, 0)
-          const groupHours = items.reduce((sum, item) => sum + item.service_hours, 0)
+          const groupTotal = Math.round(items.reduce((sum, item) => sum + item.voucher_total, 0) * 100) / 100
+          const groupCommission = Math.round(items.reduce((sum, item) => sum + item.commission_amount, 0) * 100) / 100
+          const groupHours = Math.round(items.reduce((sum, item) => sum + item.service_hours, 0) * 100) / 100
           const commRate = commissionRates.find(r => r.introducer === introducer)
 
           return (
@@ -811,9 +811,9 @@ export default function VoucherCommissionPage() {
                         })
                         
                         // 添加客戶小結行
-                        const customerTotalHours = customerItems.reduce((sum, i) => sum + i.service_hours, 0)
-                        const customerTotalVoucher = customerItems.reduce((sum, i) => sum + i.voucher_total, 0)
-                        const customerTotalCommission = customerItems.reduce((sum, i) => sum + i.commission_amount, 0)
+                        const customerTotalHours = Math.round(customerItems.reduce((sum, i) => sum + i.service_hours, 0) * 100) / 100
+                        const customerTotalVoucher = Math.round(customerItems.reduce((sum, i) => sum + i.voucher_total, 0) * 100) / 100
+                        const customerTotalCommission = Math.round(customerItems.reduce((sum, i) => sum + i.commission_amount, 0) * 100) / 100
                         rows.push(
                           <tr key={`subtotal-${customerId}`} className="bg-gray-50 border-t-2 border-gray-200">
                             <td className="px-4 py-2 text-text-primary font-medium">

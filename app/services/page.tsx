@@ -1602,8 +1602,8 @@ function ScheduleSummaryView({
 }) {
   const calculateSummary = () => {
     const allSchedules = Object.values(localSchedules || {}).flat()
-    const totalHours = (allSchedules || []).reduce((sum, schedule) => sum + (schedule.service_hours || 0), 0)
-    const totalFee = (allSchedules || []).reduce((sum, schedule) => sum + (schedule.service_fee || 0), 0)
+    const totalHours = Math.round((allSchedules || []).reduce((sum, schedule) => sum + (schedule.service_hours || 0), 0) * 100) / 100
+    const totalFee = Math.round((allSchedules || []).reduce((sum, schedule) => sum + (schedule.service_fee || 0), 0) * 100) / 100
     const totalCount = allSchedules?.length || 0
 
     return {
@@ -1662,9 +1662,9 @@ function ScheduleSummaryView({
         }
 
         serviceTypeStats[serviceType].count += 1
-        serviceTypeStats[serviceType].total_hours += hours
+        serviceTypeStats[serviceType].total_hours = Math.round((serviceTypeStats[serviceType].total_hours + hours) * 100) / 100
         // 使用 Math.round 修復浮點數精度問題
-        serviceTypeStats[serviceType].total_amount += Math.round(hours * rate * 100) / 100
+        serviceTypeStats[serviceType].total_amount = Math.round((serviceTypeStats[serviceType].total_amount + Math.round(hours * rate * 100) / 100) * 100) / 100
       })
 
       const result = Object.entries(serviceTypeStats).map(([serviceType, stats]) => ({
@@ -4734,11 +4734,11 @@ export default function ServicesPage() {
     const totalRecords = records.length
     const totalHours = records.reduce((sum, record) => {
       const hours = parseFloat(String(record.service_hours || '0'))
-      return sum + (isNaN(hours) ? 0 : hours)
+      return Math.round((sum + (isNaN(hours) ? 0 : hours)) * 100) / 100
     }, 0)
     const totalSalary = records.reduce((sum, record) => {
       const salary = parseFloat(String(record.staff_salary || '0'))
-      return sum + (isNaN(salary) ? 0 : salary)
+      return Math.round((sum + (isNaN(salary) ? 0 : salary)) * 100) / 100
     }, 0)
 
     // 按所屬項目分組統計
@@ -4752,8 +4752,8 @@ export default function ServicesPage() {
         }
       }
       acc[project].count += 1
-      acc[project].hours += parseFloat(String(record.service_hours || '0'))
-      acc[project].salary += parseFloat(String(record.staff_salary || '0'))
+      acc[project].hours = Math.round((acc[project].hours + parseFloat(String(record.service_hours || '0'))) * 100) / 100
+      acc[project].salary = Math.round((acc[project].salary + parseFloat(String(record.staff_salary || '0'))) * 100) / 100
       return acc
     }, {} as Record<string, { count: number; hours: number; salary: number }>)
 
@@ -5419,11 +5419,11 @@ export default function ServicesPage() {
 
           // 生成客戶記錄
           const customerRows = customerRecords.map(record => {
-            // 累計小結數據
-            customerHours += parseFloat(record.service_hours || '0')
-            customerFees += parseFloat(record.service_fee || '0')
-            customerSalaryTotal += parseFloat(String(record.staff_salary || '0'))
-            customerProfitTotal += (record.profit !== undefined ? record.profit : ((record.service_fee || 0) - (record.staff_salary || 0)))
+            // 累計小結數據 - 使用 Math.round 修復浮點數精度問題
+            customerHours = Math.round((customerHours + parseFloat(record.service_hours || '0')) * 100) / 100
+            customerFees = Math.round((customerFees + parseFloat(record.service_fee || '0')) * 100) / 100
+            customerSalaryTotal = Math.round((customerSalaryTotal + parseFloat(String(record.staff_salary || '0'))) * 100) / 100
+            customerProfitTotal = Math.round((customerProfitTotal + (record.profit !== undefined ? record.profit : ((record.service_fee || 0) - (record.staff_salary || 0)))) * 100) / 100
 
             return `
               <tr>
@@ -5465,10 +5465,10 @@ export default function ServicesPage() {
           const subtotalRow = `<tr class="customer-subtotal">${subtotalCells}</tr>`
 
           // 累計大結數據
-          totalHours += customerHours
-          totalFees += customerFees
-          totalSalary += customerSalaryTotal
-          totalProfit += customerProfitTotal
+          totalHours = Math.round((totalHours + customerHours) * 100) / 100
+          totalFees = Math.round((totalFees + customerFees) * 100) / 100
+          totalSalary = Math.round((totalSalary + customerSalaryTotal) * 100) / 100
+          totalProfit = Math.round((totalProfit + customerProfitTotal) * 100) / 100
 
           // 生成客戶獨立表格
           // 獲取該客戶的身份證號碼和 CCSV
@@ -5765,12 +5765,12 @@ export default function ServicesPage() {
           staffRecords.forEach(record => {
             const hours = parseFloat(String(record.service_hours || '0'))
             const salary = parseFloat(String(record.staff_salary || '0'))
-            staffHours += isNaN(hours) ? 0 : hours
-            staffSalary += isNaN(salary) ? 0 : salary
+            staffHours = Math.round((staffHours + (isNaN(hours) ? 0 : hours)) * 100) / 100
+            staffSalary = Math.round((staffSalary + (isNaN(salary) ? 0 : salary)) * 100) / 100
           })
 
-          totalHours += staffHours
-          totalSalary += staffSalary
+          totalHours = Math.round((totalHours + staffHours) * 100) / 100
+          totalSalary = Math.round((totalSalary + staffSalary) * 100) / 100
 
           // 追蹤已出現的客戶，用於顯示客戶ID/CCSV小標題
           const seenCustomers = new Set<string>()
@@ -5873,8 +5873,8 @@ export default function ServicesPage() {
             projectStats[project] = { count: 0, hours: 0, salary: 0 }
           }
           projectStats[project].count += 1
-          projectStats[project].hours += parseFloat(String(record.service_hours || '0'))
-          projectStats[project].salary += parseFloat(String(record.staff_salary || '0'))
+          projectStats[project].hours = Math.round((projectStats[project].hours + parseFloat(String(record.service_hours || '0'))) * 100) / 100
+          projectStats[project].salary = Math.round((projectStats[project].salary + parseFloat(String(record.staff_salary || '0'))) * 100) / 100
         })
 
         // 總結頁面

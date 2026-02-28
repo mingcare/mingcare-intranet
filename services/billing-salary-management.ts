@@ -22,6 +22,13 @@ import type {
 // =============================================================================
 
 /**
+ * 將數值四捨五入到小數點後兩位，避免浮點數精度問題（如出現 .99）
+ */
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/**
  * 安全地从 YYYY-MM-DD 格式字符串解析日期，避免时区问题
  */
 function parseDateStringLocal(dateString: string): Date {
@@ -643,12 +650,12 @@ export async function getBusinessKPI(
     
     const lastMonthData = await getLastMonthRecords()
 
-    // 計算當前期間 KPI
-    const totalRevenue = currentData?.reduce((sum, record) => sum + (record.service_fee || 0), 0) || 0
-    const totalStaffSalary = currentData?.reduce((sum, record) => sum + (record.staff_salary || 0), 0) || 0
-    const totalProfit = totalRevenue - totalStaffSalary
-    const totalServiceHours = currentData?.reduce((sum, record) => sum + (record.service_hours || 0), 0) || 0
-    const avgProfitPerHour = totalServiceHours > 0 ? totalProfit / totalServiceHours : 0
+    // 計算當前期間 KPI - 使用 roundMoney 修復浮點數精度問題
+    const totalRevenue = roundMoney(currentData?.reduce((sum, record) => sum + (record.service_fee || 0), 0) || 0)
+    const totalStaffSalary = roundMoney(currentData?.reduce((sum, record) => sum + (record.staff_salary || 0), 0) || 0)
+    const totalProfit = roundMoney(totalRevenue - totalStaffSalary)
+    const totalServiceHours = roundMoney(currentData?.reduce((sum, record) => sum + (record.service_hours || 0), 0) || 0)
+    const avgProfitPerHour = totalServiceHours > 0 ? roundMoney(totalProfit / totalServiceHours) : 0
 
     console.log('💰 KPI 計算結果:', {
       recordCount: currentData?.length || 0,
@@ -660,7 +667,7 @@ export async function getBusinessKPI(
     })
 
     // 計算增長率
-    const lastMonthRevenue = lastMonthData?.reduce((sum, record) => sum + (record.service_fee || 0), 0) || 0
+    const lastMonthRevenue = roundMoney(lastMonthData?.reduce((sum, record) => sum + (record.service_fee || 0), 0) || 0)
     const revenueGrowthRate = lastMonthRevenue > 0
       ? ((totalRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
       : totalRevenue > 0 ? 100 : 0 // 如果上月無數據但本月有，則顯示 100% 增長
@@ -773,9 +780,9 @@ export async function getProjectCategorySummary(
         uniqueCustomers: 0
       }
 
-      existing.totalFee += record.service_fee || 0
-      existing.totalHours += record.service_hours || 0
-      existing.totalProfit += (record.service_fee || 0) - (record.staff_salary || 0)
+      existing.totalFee = roundMoney(existing.totalFee + (record.service_fee || 0))
+      existing.totalHours = roundMoney(existing.totalHours + (record.service_hours || 0))
+      existing.totalProfit = roundMoney(existing.totalProfit + (record.service_fee || 0) - (record.staff_salary || 0))
       existing.recordCount += 1
 
       summaryMap.set(category, existing)
@@ -977,7 +984,7 @@ export async function exportToCSV(
     const csvRows = [
       headers.join(','), // 標題行
       ...data.map((record: BillingSalaryRecord) => {
-        const profit = (record.service_fee || 0) - (record.staff_salary || 0)
+        const profit = roundMoney((record.service_fee || 0) - (record.staff_salary || 0))
         
         return [
           record.service_date || '',
@@ -989,10 +996,10 @@ export async function exportToCSV(
           record.end_time || '',
           record.service_hours || 0,
           `"${(record.care_staff_name || '').replace(/"/g, '""')}"`,
-          record.service_fee || 0,
-          record.staff_salary || 0,
-          record.hourly_rate || 0,
-          record.hourly_salary || 0,
+          roundMoney(record.service_fee || 0),
+          roundMoney(record.staff_salary || 0),
+          roundMoney(record.hourly_rate || 0),
+          roundMoney(record.hourly_salary || 0),
           `"${(record.service_type || '').replace(/"/g, '""')}"`,
           `"${(record.project_category || '').replace(/"/g, '""')}"`,
           `"${(record.project_manager || '').replace(/"/g, '""')}"`,
