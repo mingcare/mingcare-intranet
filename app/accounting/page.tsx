@@ -73,7 +73,11 @@ interface ExpenseBreakdown {
   客人退款: number
   銀行手續費: number
   MPF: number
+  強積金: number
   'Steven 會籍費用': number
+  股東支出: number
+  佣金: number
+  其他支出: number
   [key: string]: number
 }
 
@@ -454,7 +458,11 @@ export default function AccountingPage() {
     '客人退款': 0,
     '銀行手續費': 0,
     'MPF': 0,
-    'Steven 會籍費用': 0
+    '強積金': 0,
+    'Steven 會籍費用': 0,
+    '股東支出': 0,
+    '佣金': 0,
+    '其他支出': 0
   })
 
   // 獲取月度財務報告數據
@@ -468,9 +476,15 @@ export default function AccountingPage() {
       
       // 指定的支出類別（從 financial_transactions）
       // 注意：護理人員工資 從 billing_salary_data.staff_salary 計算，不從 financial_transactions 取
+      // 排除的支出類別（不計入月度報告）
+      const excludedExpenseCategories = [
+        '護理人員工資',  // 從 billing_salary_data.staff_salary 取得，避免重複
+        'Petty Cash',     // 零用金補充（內部轉帳）
+        '內部轉帳'        // 帳戶間轉帳
+      ]
+      
       const allowedExpenseCategories = [
         '辦公室同事工資',
-        // '護理人員工資',  // 排除！從 billing_salary_data.staff_salary 取得
         '交通開支',
         '設備',
         '廣告及軟件費用',
@@ -487,7 +501,11 @@ export default function AccountingPage() {
         '客人退款',
         '銀行手續費',
         'MPF',
-        'Steven 會籍費用'
+        '強積金',
+        'Steven 會籍費用',
+        '股東支出',
+        '佣金',
+        '其他支出'
       ]
       
       // 並行獲取所有需要的數據
@@ -730,11 +748,14 @@ export default function AccountingPage() {
           monthlyMap[monthKey].bankInterestIncome += (txn.income_amount || 0)
         }
         
-        // 支出：按類別分類
-        if (txn.expense_amount > 0 && txn.expense_category && allowedExpenseCategories.includes(txn.expense_category)) {
+        // 支出：按類別分類（排除特定類別，其餘全部計入）
+        if (txn.expense_amount > 0 && txn.expense_category && !excludedExpenseCategories.includes(txn.expense_category)) {
           const category = txn.expense_category as keyof ExpenseBreakdown
+          // 如果是已知類別，直接累加；如果是未知新類別，歸入「其他支出」
           if (monthlyMap[monthKey].expenseBreakdown[category] !== undefined) {
             monthlyMap[monthKey].expenseBreakdown[category] += (txn.expense_amount || 0)
+          } else {
+            monthlyMap[monthKey].expenseBreakdown['其他支出'] += (txn.expense_amount || 0)
           }
         }
       })
@@ -2783,7 +2804,8 @@ export default function AccountingPage() {
                             {[
                               '交通開支', '設備', '廣告及軟件費用', '辦公用品', '辦公費用',
                               '牌照費', '租金', '維修費用', '電話費及上網費', '水費', '電費',
-                              '商務餐', '保險', '客人退款', '銀行手續費', 'MPF', 'Steven 會籍費用'
+                              '商務餐', '保險', '客人退款', '銀行手續費', 'MPF', '強積金',
+                              'Steven 會籍費用', '股東支出', '佣金', '其他支出'
                             ].map(category => (
                               <div key={category} className="flex justify-between items-center py-1.5">
                                 <span className="text-sm text-text-secondary">{category}</span>
