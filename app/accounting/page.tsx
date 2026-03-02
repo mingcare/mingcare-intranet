@@ -499,13 +499,13 @@ export default function AccountingPage() {
           .gte('service_date', startDate)
           .lte('service_date', endDate),
         
-        // 獲取財務交易（按 transaction_date 篩選）
+        // 獲取財務交易（按 billing_month 年份篩選，排除零用金項目）
         supabase
           .from('financial_transactions')
-          .select('transaction_date, income_category, income_amount, expense_category, expense_amount')
-          .gte('transaction_date', startDate)
-          .lte('transaction_date', endDate)
-          .or('is_deleted.is.null,is_deleted.eq.false'),
+          .select('transaction_date, billing_month, income_category, income_amount, expense_category, expense_amount, deduct_from_petty_cash')
+          .eq('fiscal_year', selectedYear)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .or('deduct_from_petty_cash.is.null,deduct_from_petty_cash.eq.false'),
         
         // 獲取佣金費率
         supabase
@@ -695,17 +695,31 @@ export default function AccountingPage() {
         }
       })
       
-      // 處理 financial_transactions
+      // 輔助函數：將 billing_month ("2026年3月") 轉換為 monthKey ("2026-03")
+      const billingMonthToKey = (billingMonth: string): string | null => {
+        const match = billingMonth.match(/(\d{4})年(\d{1,2})月/)
+        if (!match) return null
+        return `${match[1]}-${String(parseInt(match[2])).padStart(2, '0')}`
+      }
+      
+      // 處理 financial_transactions（使用 billing_month 分組，排除零用金）
       financialTxns.forEach((txn: { 
         transaction_date: string
+        billing_month: string
         income_category: string | null
         income_amount: number
         expense_category: string | null
-        expense_amount: number 
+        expense_amount: number
+        deduct_from_petty_cash: boolean | null
       }) => {
-        if (!txn.transaction_date) return
-        const monthKey = txn.transaction_date.substring(0, 7)  // YYYY-MM
-        if (!monthlyMap[monthKey]) return
+        // 跳過零用金項目
+        if (txn.deduct_from_petty_cash) return
+        
+        // 使用 billing_month 確定歸屬月份，fallback 到 transaction_date
+        const monthKey = txn.billing_month 
+          ? billingMonthToKey(txn.billing_month) 
+          : (txn.transaction_date ? txn.transaction_date.substring(0, 7) : null)
+        if (!monthKey || !monthlyMap[monthKey]) return
         
         // 收入：銀行利息
         if (txn.income_category === '銀行利息') {
