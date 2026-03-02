@@ -76,6 +76,7 @@ export type ProjectManager =
   | 'Candy Ho'
   | 'Joe Cheung'
   | 'Kanas Leung'
+  | 'Tracy Yau'
 
 // =============================================================================
 // 篩選和搜尋類型
@@ -83,7 +84,7 @@ export type ProjectManager =
 
 // 介紹人類型（與 database.ts 保持一致）
 export type Introducer =
-  | 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho' | 'Steven Kwok'
+  | 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho' | 'Tracy Yau' | 'Steven Kwok'
   | 'Dr.Lee' | 'Annie' | 'Janet' | '陸sir' | '吳翹政' | '余翠英'
   | '陳小姐MC01' | '曾先生' | '梁曉峰' | 'raymond';
 
@@ -92,6 +93,7 @@ export const INTRODUCER_OPTIONS: { value: Introducer; label: string }[] = [
   { value: 'Kanas Leung', label: 'Kanas Leung' },
   { value: 'Joe Cheung', label: 'Joe Cheung' },
   { value: 'Candy Ho', label: 'Candy Ho' },
+  { value: 'Tracy Yau', label: 'Tracy Yau' },
   { value: 'Steven Kwok', label: 'Steven Kwok' },
   { value: 'Dr.Lee', label: 'Dr.Lee' },
   { value: 'Annie', label: 'Annie' },
@@ -271,7 +273,8 @@ export const PROJECT_CATEGORY_OPTIONS: { value: ProjectCategory; label: string }
 export const PROJECT_MANAGER_OPTIONS: { value: ProjectManager; label: string }[] = [
   { value: 'Candy Ho', label: 'Candy Ho' },
   { value: 'Joe Cheung', label: 'Joe Cheung' },
-  { value: 'Kanas Leung', label: 'Kanas Leung' }
+  { value: 'Kanas Leung', label: 'Kanas Leung' },
+  { value: 'Tracy Yau', label: 'Tracy Yau' }
 ]
 
 // =============================================================================

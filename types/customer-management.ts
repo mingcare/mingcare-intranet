@@ -140,13 +140,13 @@ export const HEALTH_STATUS_OPTIONS = [
 ] as const;
 
 export const INTRODUCER_OPTIONS = [
-  'Kanas Leung', 'Joe Cheung', 'Candy Ho', 'Steven Kwok',
+  'Kanas Leung', 'Joe Cheung', 'Candy Ho', 'Tracy Yau', 'Steven Kwok',
   'Dr.Lee', 'Annie', 'Janet', '陸sir', '吳翹政', '余翠英',
   '陳小姐MC01', '曾先生', 'raymond'
 ] as const;
 
 export const PROJECT_MANAGER_OPTIONS = [
-  'Kanas Leung', 'Joe Cheung', 'Candy Ho'
+  'Kanas Leung', 'Joe Cheung', 'Candy Ho', 'Tracy Yau'
 ] as const;
 
 export const VOUCHER_APPLICATION_STATUS_OPTIONS = [

@@ -737,6 +737,7 @@ export default function NewCustomerPage() {
                     <option value="Kanas Leung">Kanas Leung</option>
                     <option value="Joe Cheung">Joe Cheung</option>
                     <option value="Candy Ho">Candy Ho</option>
+                    <option value="Tracy Yau">Tracy Yau</option>
                     <option value="Steven Kwok">Steven Kwok</option>
                     <option value="Dr.Lee">Dr.Lee</option>
                     <option value="Annie">Annie</option>
@@ -1182,6 +1183,7 @@ export default function NewCustomerPage() {
                         <option value="Kanas Leung">Kanas Leung</option>
                         <option value="Joe Cheung">Joe Cheung</option>
                         <option value="Candy Ho">Candy Ho</option>
+                        <option value="Tracy Yau">Tracy Yau</option>
                       </select>
                     </div>
 

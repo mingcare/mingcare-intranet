@@ -483,7 +483,7 @@ copay_level = 自付比例等級
 
 **當前狀態**: last_number = 1832 (下一筆交易將為 00001833)
 
-### [public.accounting_handlers] — 經手人選項表 (3條記錄)
+### [public.accounting_handlers] — 經手人選項表 (4條記錄)
 **用途**: 財務交易經手人的下拉選單來源
 - id (integer, auto-increment) = 系統 ID
 - name (varchar) = 經手人姓名
@@ -495,6 +495,7 @@ copay_level = 自付比例等級
 - Candy Ho
 - Kanas Leung
 - Joe Cheung
+- Tracy Yau 🆕
 
 ### [public.income_categories] — 收入類別選項表 (5條記錄)
 **用途**: 收入類別的下拉選單來源
@@ -582,7 +583,7 @@ health_status_enum = { 良好, 中風, 需協助, 長期病患, 認知障礙 }
 home_visit_status_enum = { 已完成, 未完成 }
 
 introducer_enum = { 
-  Kanas Leung, Joe Cheung, Candy Ho, Steven Kwok, Dr.Lee, Annie, Janet, Raymond,
+  Kanas Leung, Joe Cheung, Candy Ho, Tracy Yau, Steven Kwok, Dr.Lee, Annie, Janet, Raymond,
   陸sir, 吳翹政, 余翠英, 陳小姐MC01, 曾先生, 梁曉峰, raymond
 }
 
@@ -598,7 +599,7 @@ preferred_area_enum = {
 
 project_category_enum = { MC社區券(醫點）, MC街客, Steven140, Steven200, Steven醫點 }
 
-project_manager_enum = { Candy Ho, Joe Cheung, Kanas Leung }
+project_manager_enum = { Candy Ho, Joe Cheung, Kanas Leung, Tracy Yau }
 
 service_type_enum = {
   ES-護送服務(陪診), FD-送飯服務, HC-家居服務, NC-護理服務(專業⼈員), 
@@ -609,7 +610,7 @@ service_type_enum = {
   介紹人獎金(一), 介紹人獎金(二), 介紹人獎金(三), 介紹人獎金(四)
 }
 
-staff_owner_enum = { Kanas Leung, Joe Cheung, Candy Ho }
+staff_owner_enum = { Kanas Leung, Joe Cheung, Candy Ho, Tracy Yau }
 
 voucher_application_status_enum = { 已經持有, 申請中 }
 
@@ -862,9 +863,9 @@ voucher_application_status_enum = { 已經持有, 申請中 }
 東區, 沙田區, 油尖旺區, 深水埗區, 灣仔區, 荃灣區, 葵青區, 西貢區,
 觀塘區, 離島區, 黃大仙區
 
-## 介紹人名單 (12位)
+## 介紹人名單 (13位)
 
-Annie, Candy Ho, Dr.Lee, Joe Cheung, Kanas Leung, Steven Kwok, raymond,
+Annie, Candy Ho, Dr.Lee, Joe Cheung, Kanas Leung, Steven Kwok, Tracy Yau, raymond,
 余翠英, 吳翹政, 曾先生, 陳小姐MC01, 陸sir
 
 ## 新增管理頁面

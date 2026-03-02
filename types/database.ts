@@ -18,7 +18,7 @@ export type Gender = '男' | '女';
 export type HealthStatus = '良好' | '中風' | '需協助' | '長期病患' | '認知障礙';
 export type HomeVisitStatus = '已完成' | '未完成';
 export type Introducer =
-  | 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho' | 'Steven Kwok'
+  | 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho' | 'Tracy Yau' | 'Steven Kwok'
   | 'Dr.Lee' | 'Annie' | 'Janet' | '陸sir' | '吳翹政' | '余翠英'
   | '陳小姐MC01' | '曾先生' | '梁曉峰' | 'raymond';
 export type LdsStatus = '已完成評估' | '已經持有' | '待社工評估';
@@ -27,7 +27,7 @@ export type PreferredArea =
   | '深水埗區' | '九龍城區' | '黃大仙區' | '觀塘區' | '西貢區' | '沙田區'
   | '大埔區' | '北區' | '荃灣區' | '屯門區' | '元朗區' | '葵青區' | '離島區';
 export type ProjectCategory = 'MC社區券(醫點）' | 'MC街客' | 'Steven140' | 'Steven200' | 'Steven醫點' | '俊佳';
-export type ProjectManager = 'Candy Ho' | 'Joe Cheung' | 'Kanas Leung';
+export type ProjectManager = 'Candy Ho' | 'Joe Cheung' | 'Kanas Leung' | 'Tracy Yau';
 export type ServiceType =
   | 'ES-護送服務(陪診)' | 'FD-送飯服務' | 'HC-家居服務' | 'NC-護理服務(專業⼈員)'
   | 'PC-到⼾看顧(輔助⼈員)' | 'RA-復康運動(輔助⼈員)' | 'RT-復康運動(OTA輔助⼈員)'
@@ -35,7 +35,7 @@ export type ServiceType =
   | '外傭培訓服務' | '新員工培訓課師' | '社區活動' | '認知障礙訓練'
   | '介紹人獎金(一)' | '介紹人獎金(二)' | '介紹人獎金(三)' | '介紹人獎金(四)';
 export type VoucherApplicationStatus = '已經持有' | '申請中';
-export type StaffOwner = 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho';
+export type StaffOwner = 'Kanas Leung' | 'Joe Cheung' | 'Candy Ho' | 'Tracy Yau';
 
 // ========================================================================
 // TABLE TYPES（資料表型別）
