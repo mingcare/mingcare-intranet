@@ -493,11 +493,13 @@ export default function AccountingPage() {
       // 並行獲取所有需要的數據
       const [billingSalaryRes, financialTxnsRes, commissionRatesRes, customersRes, voucherRatesRes] = await Promise.all([
         // 獲取服務記錄（按 service_date 篩選）
+        // 注意：必須加 .range() 覆蓋所有記錄，Supabase 預設只返回 1000 行
         supabase
           .from('billing_salary_data')
           .select('service_date, service_fee, staff_salary, customer_id, service_hours, service_type, project_category')
           .gte('service_date', startDate)
-          .lte('service_date', endDate),
+          .lte('service_date', endDate)
+          .range(0, 49999),
         
         // 獲取財務交易（按 billing_month 年份篩選，排除零用金項目）
         supabase
@@ -505,7 +507,8 @@ export default function AccountingPage() {
           .select('transaction_date, billing_month, income_category, income_amount, expense_category, expense_amount, deduct_from_petty_cash')
           .eq('fiscal_year', selectedYear)
           .or('is_deleted.is.null,is_deleted.eq.false')
-          .or('deduct_from_petty_cash.is.null,deduct_from_petty_cash.eq.false'),
+          .or('deduct_from_petty_cash.is.null,deduct_from_petty_cash.eq.false')
+          .range(0, 49999),
         
         // 獲取佣金費率
         supabase
@@ -515,7 +518,8 @@ export default function AccountingPage() {
         // 獲取客戶介紹人信息
         supabase
           .from('customer_personal_data')
-          .select('customer_id, introducer'),
+          .select('customer_id, introducer')
+          .range(0, 49999),
         
         // 獲取社區券費率
         supabase
