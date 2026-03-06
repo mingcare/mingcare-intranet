@@ -1,6 +1,6 @@
 {
   "name": "mingcare-intranet",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "明家居家護理服務 Intranet 系統",
   "scripts": {
     "dev": "next dev",
