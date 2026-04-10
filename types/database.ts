@@ -29,8 +29,8 @@ export type PreferredArea =
 export type ProjectCategory = 'MC社區券(醫點）' | 'MC街客' | 'Steven140' | 'Steven200' | 'Steven醫點' | '俊佳';
 export type ProjectManager = 'Candy Ho' | 'Joe Cheung' | 'Kanas Leung' | 'Tracy Yau';
 export type ServiceType =
-  | 'ES-護送服務(陪診)' | 'FD-送飯服務' | 'HC-家居服務' | 'NC-護理服務(專業⼈員)'
-  | 'PC-到⼾看顧(輔助⼈員)' | 'RA-復康運動(輔助⼈員)' | 'RT-復康運動(OTA輔助⼈員)'
+  | 'ES-護送服務(陪診)' | 'FD-送飯服務' | 'HC-家居服務' | 'NA-護理服務（輔助人員）'
+  | 'NC-護理服務(專業⼈員)' | 'PC-到⼾看顧(輔助⼈員)' | 'RA-復康運動(輔助⼈員)' | 'RT-復康運動(OTA輔助⼈員)'
   | 'RT-復康運動(專業⼈員)' | '上門評估服務' | '傷口護理' | '免費服務體驗'
   | '外傭培訓服務' | '新員工培訓課師' | '社區活動' | '認知障礙訓練'
   | '介紹人獎金(一)' | '介紹人獎金(二)' | '介紹人獎金(三)' | '介紹人獎金(四)';

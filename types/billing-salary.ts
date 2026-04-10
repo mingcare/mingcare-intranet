@@ -47,6 +47,7 @@ export type ServiceType =
   | 'ES-護送服務(陪診)'
   | 'FD-送飯服務'
   | 'HC-家居服務'
+  | 'NA-護理服務（輔助人員）'
   | 'NC-護理服務(專業⼈員)'
   | 'PC-到⼾看顧(輔助⼈員)'
   | 'RA-復康運動(輔助⼈員)'
@@ -243,6 +244,7 @@ export const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
   { value: 'ES-護送服務(陪診)', label: 'ES-護送服務(陪診)' },
   { value: 'FD-送飯服務', label: 'FD-送飯服務' },
   { value: 'HC-家居服務', label: 'HC-家居服務' },
+  { value: 'NA-護理服務（輔助人員）', label: 'NA-護理服務（輔助人員）' },
   { value: 'NC-護理服務(專業⼈員)', label: 'NC-護理服務(專業⼈員)' },
   { value: 'PC-到⼾看顧(輔助⼈員)', label: 'PC-到⼾看顧(輔助⼈員)' },
   { value: 'RA-復康運動(輔助⼈員)', label: 'RA-復康運動(輔助⼈員)' },
