@@ -1292,8 +1292,25 @@ export interface VoucherRate {
   id: string
   service_type: string
   service_rate: number
+  effective_date: string
   created_at: string
   updated_at: string
+}
+
+// 根據服務日期從費率列表中找出適用的費率
+// 邏輯：找 effective_date <= serviceDate 的最新一筆
+export function getApplicableRate(rates: VoucherRate[], serviceType: string, serviceDate?: string): number {
+  const matched = rates
+    .filter(r => r.service_type === serviceType)
+    .sort((a, b) => b.effective_date.localeCompare(a.effective_date))
+
+  if (!serviceDate) {
+    // 沒有日期就取最新費率
+    return matched[0]?.service_rate || 0
+  }
+
+  const applicable = matched.find(r => r.effective_date <= serviceDate)
+  return applicable?.service_rate || matched[matched.length - 1]?.service_rate || 0
 }
 
 // 獲取所有社區券費率
@@ -1303,6 +1320,7 @@ export async function fetchVoucherRates(): Promise<ApiResponse<VoucherRate[]>> {
       .from('voucher_rate')
       .select('*')
       .order('service_type', { ascending: true })
+      .order('effective_date', { ascending: false })
 
     if (error) throw error
 
@@ -1341,7 +1359,6 @@ export async function calculateVoucherSummary(
     }
 
     const voucherRates = voucherRatesResponse.data
-    const rateMap = new Map(voucherRates.map(rate => [rate.service_type, rate.service_rate]))
 
     // 獲取符合篩選條件的記錄 - 使用足夠大的 pageSize 以獲取所有記錄
     const recordsResponse = await fetchBillingSalaryRecords(filters, 1, 50000)
@@ -1355,33 +1372,39 @@ export async function calculateVoucherSummary(
     const serviceTypeMap = new Map<string, {
       count: number
       total_hours: number
+      total_amount: number
     }>()
 
     records.forEach((record: BillingSalaryRecord) => {
       const serviceType = record.service_type
       const hours = record.service_hours || 0
+      const rate = getApplicableRate(voucherRates, serviceType, record.service_date)
 
       if (!serviceTypeMap.has(serviceType)) {
         serviceTypeMap.set(serviceType, {
           count: 0,
-          total_hours: 0
+          total_hours: 0,
+          total_amount: 0
         })
       }
 
       const current = serviceTypeMap.get(serviceType)!
       current.count += 1
       current.total_hours += hours
+      current.total_amount += Math.round(hours * rate * 100) / 100
     })
 
-    // 計算費用 - 使用 Math.round 修復浮點數精度問題
+    // 計算費用
     const serviceTypeSummary = Array.from(serviceTypeMap.entries()).map(([serviceType, stats]) => {
-      const rate = rateMap.get(serviceType) || 0
+      // 用第一條記錄的日期來決定顯示的費率（同月份內費率一致）
+      const representativeDate = records.find((r: BillingSalaryRecord) => r.service_type === serviceType)?.service_date
+      const rate = getApplicableRate(voucherRates, serviceType, representativeDate)
       return {
         service_type: serviceType,
         count: stats.count,
         total_hours: stats.total_hours,
         total_rate: rate,
-        total_amount: Math.round(stats.total_hours * rate * 100) / 100
+        total_amount: Math.round(stats.total_amount * 100) / 100
       }
     }).sort((a, b) => a.service_type.localeCompare(b.service_type))
 

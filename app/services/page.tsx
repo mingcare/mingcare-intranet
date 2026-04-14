@@ -44,7 +44,8 @@ import {
   CustomerSearchResult,
   fetchVoucherRates,
   calculateVoucherSummary,
-  VoucherRate
+  VoucherRate,
+  getApplicableRate
 } from '../../services/billing-salary-management'
 import { exportCalendar, CalendarExportOptions } from '../../services/calendar-export'
 
@@ -1636,8 +1637,7 @@ function ScheduleSummaryView({
       }
 
       const voucherRates = voucherRatesResponse.data
-      const rateMap = new Map(voucherRates.map(rate => [rate.service_type, rate.service_rate]))
-      console.log('社區券費率表:', rateMap) // 調試日誌
+      console.log('社區券費率表:', voucherRates) // 調試日誌
 
       // 按服務類型分組統計
       const serviceTypeStats: Record<string, {
@@ -1649,7 +1649,7 @@ function ScheduleSummaryView({
 
       allSchedules.forEach(schedule => {
         const serviceType = schedule.service_type || '未分類'
-        const rate = rateMap.get(serviceType) || 0
+        const rate = getApplicableRate(voucherRates, serviceType, schedule.service_date)
         const hours = schedule.service_hours || 0
 
         if (!serviceTypeStats[serviceType]) {

@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabase'
 interface VoucherRate {
   service_type: string
   service_rate: number
+  effective_date: string
 }
 
 interface CommissionRate {
@@ -262,42 +263,29 @@ export default function VoucherCommissionPage() {
           return true
         })
 
-      // 使用 service_type 欄位匹配社區券費率
-      const getVoucherRate = (serviceType: string): number => {
-        // 直接匹配 voucher_rate 表
-        const matchedRate = voucherRates.find(v => {
-          // 完全匹配
-          if (v.service_type === serviceType) return true
-          // 部分匹配（處理全形/半形差異）
-          const normalizedServiceType = serviceType.replace(/[⼀-⿿]/g, char => char) // 保持原樣
-          const normalizedVoucherType = v.service_type.replace(/[⼀-⿿]/g, char => char)
-          return normalizedVoucherType.includes(serviceType.substring(0, 2)) || 
-                 serviceType.includes(v.service_type.substring(0, 2))
-        })
+      // 使用 service_type 欄位匹配社區券費率（根據 effective_date 自動選擇適用費率）
+      const getVoucherRate = (serviceType: string, serviceDate?: string): number => {
+        // 找出所有匹配的費率，按 effective_date 降序
+        const matchedRates = voucherRates
+          .filter(v => {
+            if (v.service_type === serviceType) return true
+            const normalizedServiceType = serviceType.replace(/[⼀-⿿]/g, char => char)
+            const normalizedVoucherType = v.service_type.replace(/[⼀-⿿]/g, char => char)
+            return normalizedVoucherType.includes(serviceType.substring(0, 2)) || 
+                   serviceType.includes(v.service_type.substring(0, 2))
+          })
+          .sort((a, b) => (b.effective_date || '').localeCompare(a.effective_date || ''))
         
-        if (matchedRate) {
-          return matchedRate.service_rate
+        if (matchedRates.length > 0 && serviceDate) {
+          // 找 effective_date <= serviceDate 的最新費率
+          const applicable = matchedRates.find(r => r.effective_date <= serviceDate)
+          return applicable?.service_rate || matchedRates[matchedRates.length - 1]?.service_rate || 0
         }
         
-        // 備用匹配邏輯
-        if (serviceType.includes('NC') || serviceType.includes('護理')) {
-          return 945
+        if (matchedRates.length > 0) {
+          return matchedRates[0]?.service_rate || 0
         }
-        if (serviceType.includes('RT') && serviceType.includes('專業')) {
-          return 982
-        }
-        if (serviceType.includes('RT') || serviceType.includes('復康') || serviceType.includes('OTA') || serviceType.includes('RA')) {
-          return 248
-        }
-        if (serviceType.includes('PC') || serviceType.includes('看顧')) {
-          return 248
-        }
-        if (serviceType.includes('HC') || serviceType.includes('家居')) {
-          return 150
-        }
-        if (serviceType.includes('ES') || serviceType.includes('護送') || serviceType.includes('陪診')) {
-          return 150
-        }
+        
         return 0
       }
 
@@ -305,8 +293,8 @@ export default function VoucherCommissionPage() {
       const detailRecords: VoucherCommissionDetail[] = []
       
       filteredRecords.forEach((record: ExtendedBillingRecord) => {
-        // 使用 service_type 欄位獲取社區券費率
-        const rate = getVoucherRate(record.service_type || '')
+        // 使用 service_type 欄位獲取社區券費率（根據服務日期選擇新舊費率）
+        const rate = getVoucherRate(record.service_type || '', record.service_date)
         // 如果沒有匹配的費率，使用實際服務費 / 服務時數
         const effectiveRate = rate > 0 ? rate : (record.service_hours > 0 ? Math.round(record.service_fee / record.service_hours * 100) / 100 : 0)
         
