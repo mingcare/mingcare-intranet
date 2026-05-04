@@ -72,6 +72,7 @@ export type ProjectCategory =
   | 'Steven200'
   | 'Steven醫點'
   | '俊佳'
+  | '安心同行'
 
 export type ProjectManager = 
   | 'Candy Ho'
