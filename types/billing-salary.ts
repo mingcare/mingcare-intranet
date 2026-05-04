@@ -269,7 +269,7 @@ export const PROJECT_CATEGORY_OPTIONS: { value: ProjectCategory; label: string }
   { value: 'Steven140', label: 'Steven140' },
   { value: 'Steven200', label: 'Steven200' },
   { value: 'Steven醫點', label: 'Steven醫點' },
-  { value: '俊佳', label: '俊佳' }
+  { value: '俊佳', label: '俊佳' },
   { value: '安心同行', label: '安心同行' }
 ]
 
